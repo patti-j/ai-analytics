@@ -12,23 +12,21 @@ interface PublishDateResponse {
 export function usePublishDate() {
   return useQuery({
     queryKey: ['publish-date'],
-    queryFn: async (): Promise<Date> => {
-      const response = await fetch('/api/last-update');
-      if (!response.ok) {
-        throw new Error('Failed to fetch publish date');
+    queryFn: async (): Promise<Date | null> => {
+      try {
+        const response = await fetch('/api/last-update');
+        if (!response.ok) return null;
+        const data: PublishDateResponse = await response.json();
+        if (data.ok && data.lastUpdate) {
+          return new Date(data.lastUpdate);
+        }
+        return null;
+      } catch {
+        return null;
       }
-      
-      const data: PublishDateResponse = await response.json();
-      
-      if (data.ok && data.lastUpdate) {
-        return new Date(data.lastUpdate);
-      }
-      
-      // Fallback to current date if no publish date available
-      return new Date();
     },
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
-    retry: 1,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    retry: false,
   });
 }

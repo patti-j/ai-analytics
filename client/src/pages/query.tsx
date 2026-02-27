@@ -272,6 +272,39 @@ export default function QueryPage() {
     if (!isAuthenticated) return;
     const effectiveAdmin = isCompanyAdmin || isPtAdmin;
 
+    function buildFromEntitlements(): FilterOptions | null {
+      if (!entitlements || entitlements.length === 0) return null;
+      const byScope = new Map<string, string[]>();
+      for (const e of entitlements) {
+        const vals = byScope.get(e.ScopeType) || [];
+        vals.push(e.ScopeValue);
+        byScope.set(e.ScopeType, vals);
+      }
+      const paValues = (byScope.get('PlanningArea') || []).sort();
+      const plantValues = (byScope.get('Plant') || []).sort();
+      const scenarioValues = (byScope.get('Scenario') || []).sort();
+      const resourceValues = (byScope.get('Resource') || []).sort();
+      const productValues = (byScope.get('Product') || []).sort();
+      const workcenterValues = (byScope.get('Workcenter') || []).sort();
+      return {
+        planningAreas: ['All Planning Areas', ...paValues],
+        scenarios: scenarioValues.map(s => ({ id: s, name: s, type: '' })),
+        plants: ['All Plants', ...plantValues],
+        resources: ['All Resources', ...resourceValues],
+        products: ['All Products', ...productValues],
+        workcenters: ['All Workcenters', ...workcenterValues],
+      };
+    }
+
+    function hasActualValues(data: FilterOptions): boolean {
+      return (data.planningAreas?.length > 1) ||
+             (data.scenarios?.length > 0) ||
+             (data.plants?.length > 1) ||
+             (data.resources?.length > 1) ||
+             (data.products?.length > 1) ||
+             (data.workcenters?.length > 1);
+    }
+
     if (effectiveAdmin) {
       fetch('/api/filter-options')
         .then(res => {
@@ -279,32 +312,20 @@ export default function QueryPage() {
           return res.json();
         })
         .then((data: FilterOptions) => {
-          setFilterOptions(data);
+          if (hasActualValues(data)) {
+            setFilterOptions(data);
+          } else {
+            const fallback = buildFromEntitlements();
+            setFilterOptions(fallback || data);
+          }
         })
-        .catch(() => {});
-    } else if (entitlements) {
-      const byScope = new Map<string, string[]>();
-      for (const e of entitlements) {
-        const vals = byScope.get(e.ScopeType) || [];
-        vals.push(e.ScopeValue);
-        byScope.set(e.ScopeType, vals);
-      }
-
-      const paValues = (byScope.get('PlanningArea') || []).sort();
-      const plantValues = (byScope.get('Plant') || []).sort();
-      const scenarioValues = (byScope.get('Scenario') || []).sort();
-      const resourceValues = (byScope.get('Resource') || []).sort();
-      const productValues = (byScope.get('Product') || []).sort();
-      const workcenterValues = (byScope.get('Workcenter') || []).sort();
-
-      setFilterOptions({
-        planningAreas: ['All Planning Areas', ...paValues],
-        scenarios: scenarioValues.map(s => ({ id: s, name: s, type: '' })),
-        plants: ['All Plants', ...plantValues],
-        resources: ['All Resources', ...resourceValues],
-        products: ['All Products', ...productValues],
-        workcenters: ['All Workcenters', ...workcenterValues],
-      });
+        .catch(() => {
+          const fallback = buildFromEntitlements();
+          if (fallback) setFilterOptions(fallback);
+        });
+    } else {
+      const fromEntitlements = buildFromEntitlements();
+      if (fromEntitlements) setFilterOptions(fromEntitlements);
     }
   }, [isAuthenticated, entitlements, isCompanyAdmin, isPtAdmin]);
 

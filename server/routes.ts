@@ -228,13 +228,16 @@ export async function registerRoutes(
     try {
       const companyId = req.embedSession?.companyId;
 
+      async function safeQuery(sql: string) {
+        try { return await runPublishQuery(companyId, sql); } catch { return { recordset: [] }; }
+      }
       const [planningAreaResult, scenarioResult, plantResult, resourceResult, productResult, workcenterResult] = await Promise.all([
-        runPublishQuery(companyId, "SELECT DISTINCT PlanningAreaName FROM [publish].[DASHt_Resources] WHERE PlanningAreaName IS NOT NULL ORDER BY PlanningAreaName"),
-        runPublishQuery(companyId, "SELECT DISTINCT NewScenarioId, ScenarioName, ScenarioType FROM [publish].[DASHt_Planning] WHERE NewScenarioId IS NOT NULL ORDER BY ScenarioType, ScenarioName"),
-        runPublishQuery(companyId, "SELECT DISTINCT PlantName FROM [publish].[DASHt_Resources] WHERE PlantName IS NOT NULL ORDER BY PlantName"),
-        runPublishQuery(companyId, "SELECT DISTINCT ResourceName FROM [publish].[DASHt_Resources] WHERE ResourceName IS NOT NULL ORDER BY ResourceName"),
-        runPublishQuery(companyId, "SELECT DISTINCT TOP 500 ProductName FROM [publish].[DASHt_Planning] WHERE ProductName IS NOT NULL ORDER BY ProductName"),
-        runPublishQuery(companyId, "SELECT DISTINCT WorkcenterName FROM [publish].[DASHt_Resources] WHERE WorkcenterName IS NOT NULL ORDER BY WorkcenterName"),
+        safeQuery("SELECT DISTINCT PlanningAreaName FROM [publish].[DASHt_Resources] WHERE PlanningAreaName IS NOT NULL ORDER BY PlanningAreaName"),
+        safeQuery("SELECT DISTINCT NewScenarioId, ScenarioName, ScenarioType FROM [publish].[DASHt_Planning] WHERE NewScenarioId IS NOT NULL ORDER BY ScenarioType, ScenarioName"),
+        safeQuery("SELECT DISTINCT PlantName FROM [publish].[DASHt_Resources] WHERE PlantName IS NOT NULL ORDER BY PlantName"),
+        safeQuery("SELECT DISTINCT ResourceName FROM [publish].[DASHt_Resources] WHERE ResourceName IS NOT NULL ORDER BY ResourceName"),
+        safeQuery("SELECT DISTINCT TOP 500 ProductName FROM [publish].[DASHt_Planning] WHERE ProductName IS NOT NULL ORDER BY ProductName"),
+        safeQuery("SELECT DISTINCT WorkcenterName FROM [publish].[DASHt_Resources] WHERE WorkcenterName IS NOT NULL ORDER BY WorkcenterName"),
       ]);
 
       let planningAreas = (planningAreaResult?.recordset || []).map((r: any) => r.PlanningAreaName).filter(Boolean);
