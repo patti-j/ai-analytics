@@ -29,6 +29,7 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 - **Query Performance Monitoring:** An analytics dashboard (`/dashboard`) provides metrics on query performance, success rates, latency, and error analytics.
 - **User Permissions Enforcement:** Server-side enforcement injects WHERE clauses based on user permissions (`Planning Areas`, `Scenarios`, `Plants`) and restricts access to sensitive tables like `DASHt_SalesOrders` for non-admin users.
 - **Pinned Dashboard:** Users can pin favorite queries to a personal dashboard for quick access, storing up to 20 items locally with cached results.
+- **Server-Persisted Favorites:** Favorite questions are persisted to `dbo.AiUserFavorite` (CompanyId, UserEmail, QuestionText, CreatedAt) via `/api/favorites` GET/POST/DELETE routes. The `useFavoriteQueries` hook uses the API when authenticated, falls back to localStorage otherwise, and merges local-only favorites into the server on first authenticated load.
 - **Global Filters:** Three dropdown filters (Planning Area, Scenario, Plant) are available in the UI, applied to all queries.
 - **SSE Streaming:** Full SSE streaming support (`/api/ask/stream`) with typing effects and a stop button is available, auto-enabled in Azure deployments.
 - **ScenarioType Filtering:** `DASHt_Planning` and `DASHt_SalesOrders` queries use the user's selected scenario from the dropdown filter.
@@ -62,6 +63,7 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 - `server/db-publish.ts`: Dynamic per-company Publish DB pools
 - `server/entitlement-storage.ts`: AiAnalyticsUser & AiUserEntitlement CRUD
 - `server/membership-sync.ts`: AI_Analytics role membership sync
+- `server/favorites-storage.ts`: AiUserFavorite CRUD (CompanyId+UserEmail+QuestionText scoped)
 
 **Theme Override from Parent:**
 - Parent can send `ui.theme` ("dark"|"light") in the `PT.EMBED.AUTH` postMessage

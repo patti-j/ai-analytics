@@ -46,6 +46,7 @@ import {
   upsertUser,
 } from "./entitlement-storage";
 import { syncMembership } from "./membership-sync";
+import { getFavoritesForUser, addFavorite as addFavoriteDb, removeFavorite as removeFavoriteDb } from "./favorites-storage";
 import { isWebAppConfigured } from "./db-webapp";
 import { executePublishQuery } from "./db-publish";
 
@@ -189,6 +190,60 @@ export async function registerRoutes(
     } catch (error: any) {
       log(`[entitlements] Error fetching my entitlements: ${error.message}`, 'error');
       res.status(500).json({ error: 'Failed to fetch entitlements' });
+    }
+  });
+
+  app.get("/api/favorites", async (req, res) => {
+    try {
+      if (!req.embedSession) {
+        return res.status(401).json({ error: 'Not authenticated', favorites: [] });
+      }
+      const { companyId, email } = req.embedSession;
+      const rows = await getFavoritesForUser(companyId, email);
+      const favorites = rows.map(r => ({
+        question: r.QuestionText,
+        savedAt: r.CreatedAt,
+      }));
+      res.json({ favorites });
+    } catch (error: any) {
+      log(`[favorites] Error fetching favorites: ${error.message}`, 'error');
+      res.json({ favorites: [] });
+    }
+  });
+
+  app.post("/api/favorites", async (req, res) => {
+    try {
+      if (!req.embedSession) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      const { companyId, email } = req.embedSession;
+      const { question } = req.body;
+      if (!question || typeof question !== 'string' || question.trim().length === 0) {
+        return res.status(400).json({ error: 'Question text is required' });
+      }
+      await addFavoriteDb(companyId, email, question.trim());
+      res.json({ ok: true });
+    } catch (error: any) {
+      log(`[favorites] Error adding favorite: ${error.message}`, 'error');
+      res.status(500).json({ error: 'Failed to save favorite' });
+    }
+  });
+
+  app.delete("/api/favorites", async (req, res) => {
+    try {
+      if (!req.embedSession) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      const { companyId, email } = req.embedSession;
+      const { question } = req.body;
+      if (!question || typeof question !== 'string') {
+        return res.status(400).json({ error: 'Question text is required' });
+      }
+      await removeFavoriteDb(companyId, email, question.trim());
+      res.json({ ok: true });
+    } catch (error: any) {
+      log(`[favorites] Error removing favorite: ${error.message}`, 'error');
+      res.status(500).json({ error: 'Failed to remove favorite' });
     }
   });
 
