@@ -26,7 +26,7 @@ export function ThemeProvider({
   storageKey = "query-insight-theme",
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
+  const [theme, setThemeState] = useState<Theme>(
     () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
   );
 
@@ -48,11 +48,22 @@ export function ThemeProvider({
     root.classList.add(theme);
   }, [theme]);
 
+  useEffect(() => {
+    function onThemeOverride(e: Event) {
+      const detail = (e as CustomEvent).detail as Theme;
+      if (detail === 'dark' || detail === 'light' || detail === 'system') {
+        setThemeState(detail);
+      }
+    }
+    window.addEventListener("theme-override", onThemeOverride);
+    return () => window.removeEventListener("theme-override", onThemeOverride);
+  }, []);
+
   const value = {
     theme,
     setTheme: (theme: Theme) => {
       localStorage.setItem(storageKey, theme);
-      setTheme(theme);
+      setThemeState(theme);
     },
   };
 

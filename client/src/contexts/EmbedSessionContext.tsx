@@ -48,6 +48,7 @@ function applyTheme(theme: 'dark' | 'light') {
   root.classList.remove('light', 'dark');
   root.classList.add(theme);
   localStorage.setItem('query-insight-theme', theme);
+  window.dispatchEvent(new CustomEvent('theme-override', { detail: theme }));
 }
 
 export function EmbedSessionProvider({ children }: { children: React.ReactNode }) {

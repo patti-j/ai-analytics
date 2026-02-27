@@ -63,8 +63,14 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 - `server/entitlement-storage.ts`: AiAnalyticsUser & AiUserEntitlement CRUD
 - `server/membership-sync.ts`: AI_Analytics role membership sync
 
+**Theme Override from Parent:**
+- Parent can send `ui.theme` ("dark"|"light") in the `PT.EMBED.AUTH` postMessage
+- `EmbedSessionContext.applyTheme()` applies CSS class + localStorage + dispatches `theme-override` CustomEvent
+- `ThemeProvider` listens for `theme-override` event to sync its React state with the DOM change
+
 **Key Frontend Files:**
-- `client/src/contexts/EmbedSessionContext.tsx`: PostMessage listener, session management, entitlements loading
+- `client/src/contexts/EmbedSessionContext.tsx`: PostMessage listener, session management, entitlements loading, theme override
+- `client/src/components/theme-provider.tsx`: Theme management with external override support via CustomEvent
 - `client/src/pages/admin-users.tsx`: Admin page for managing user entitlements (/admin/users)
 - `client/src/pages/admin-permissions.tsx`: Legacy admin page for JSON-file permissions (/admin/permissions)
 
