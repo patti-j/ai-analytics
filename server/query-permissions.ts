@@ -1,4 +1,4 @@
-import { UserPermissions, TableAccess } from '@shared/schema';
+import { UserPermissions, TableAccess, AiUserEntitlement, ScopeType } from '@shared/schema';
 import { getUserPermissionsByUsername, getUserPermissions } from './permissions-storage';
 import { log } from './index';
 
@@ -28,10 +28,13 @@ interface TableColumnMapping {
   planningArea?: string;
   scenario?: string;
   plant?: string;
+  resource?: string;
+  product?: string;
+  workcenter?: string;
 }
 
 const TABLE_COLUMN_MAPPINGS: Record<string, TableColumnMapping> = {
-  'DASHt_Planning': { planningArea: 'PlanningAreaName', scenario: 'NewScenarioId', plant: 'BlockPlant' },
+  'DASHt_Planning': { planningArea: 'PlanningAreaName', scenario: 'NewScenarioId', plant: 'BlockPlant', product: 'ProductName' },
   'DASHt_SalesOrders': { planningArea: 'PlanningAreaName', scenario: 'NewScenarioId' },
   'DASHt_SalesOrderLines': { planningArea: 'PlanningAreaName', scenario: 'NewScenarioId' },
   'DASHt_CapacityPlanning': { planningArea: 'PlanningAreaName', scenario: 'NewScenarioId', plant: 'PlantName' },
@@ -39,6 +42,19 @@ const TABLE_COLUMN_MAPPINGS: Record<string, TableColumnMapping> = {
   'DASHt_Inventories': { planningArea: 'PlanningAreaName', scenario: 'NewScenarioId' },
   'DASHt_ScheduleConformance': { planningArea: 'PlanningAreaName', plant: 'PlantName' },
   'Jobs': { planningArea: 'PlanningAreaName', scenario: 'NewScenarioId', plant: 'Plant' },
+  'DASHt_Resources': { planningArea: 'PlanningAreaName', plant: 'PlantName', resource: 'ResourceName', workcenter: 'WorkcenterName' },
+  'DASHt_CapacityPlanning_ResourceDemand': { resource: 'ResourceName', plant: 'PlantName' },
+  'DASHt_CapacityPlanning_ResourceCapacity': { resource: 'ResourceName', plant: 'PlantName' },
+  'DASHt_CapacityPlanning_ShiftsCombined': { resource: 'ResourceName' },
+};
+
+const SCOPE_TO_COLUMN_KEY: Record<ScopeType, keyof TableColumnMapping> = {
+  PlanningArea: 'planningArea',
+  Plant: 'plant',
+  Scenario: 'scenario',
+  Resource: 'resource',
+  Product: 'product',
+  Workcenter: 'workcenter',
 };
 
 function extractTableNames(sql: string): string[] {
@@ -63,7 +79,7 @@ function getPlantColumnForTables(tables: string[]): string | null {
 
 function hasColumnInTables(columnName: string, tables: string[]): boolean {
   const columnsPerTable: Record<string, string[]> = {
-    'DASHt_Planning': ['PlanningAreaName', 'NewScenarioId', 'BlockPlant', 'ScenarioType'],
+    'DASHt_Planning': ['PlanningAreaName', 'NewScenarioId', 'BlockPlant', 'ScenarioType', 'ProductName'],
     'DASHt_SalesOrders': ['PlanningAreaName', 'NewScenarioId', 'ScenarioType'],
     'DASHt_SalesOrderLines': ['PlanningAreaName', 'NewScenarioId'],
     'DASHt_CapacityPlanning': ['PlanningAreaName', 'NewScenarioId', 'PlantName'],
@@ -71,6 +87,10 @@ function hasColumnInTables(columnName: string, tables: string[]): boolean {
     'DASHt_Inventories': ['PlanningAreaName', 'NewScenarioId'],
     'DASHt_ScheduleConformance': ['PlanningAreaName', 'PlantName'],
     'Jobs': ['PlanningAreaName', 'NewScenarioId', 'Plant', 'ScenarioType'],
+    'DASHt_Resources': ['PlanningAreaName', 'PlantName', 'ResourceName', 'WorkcenterName'],
+    'DASHt_CapacityPlanning_ResourceDemand': ['ResourceName', 'PlantName'],
+    'DASHt_CapacityPlanning_ResourceCapacity': ['ResourceName', 'PlantName'],
+    'DASHt_CapacityPlanning_ShiftsCombined': ['ResourceName'],
   };
 
   for (const table of tables) {
@@ -85,11 +105,17 @@ function hasColumnInTables(columnName: string, tables: string[]): boolean {
 function getTableAlias(sql: string, tableName: string): string | null {
   const aliasPattern = new RegExp(
     `(?:FROM|JOIN)\\s+\\[?publish\\]?\\.\\[?${tableName}\\]?(?:\\s+(?:AS\\s+)?(\\w+))?`,
-    'i'
+    'gi'
   );
-  const match = sql.match(aliasPattern);
-  if (match && match[1]) {
-    return match[1];
+  let match;
+  while ((match = aliasPattern.exec(sql)) !== null) {
+    if (match[1]) {
+      const keyword = match[1].toUpperCase();
+      if (['WHERE', 'ON', 'INNER', 'LEFT', 'RIGHT', 'CROSS', 'FULL', 'JOIN', 'GROUP', 'ORDER', 'HAVING', 'UNION'].includes(keyword)) {
+        continue;
+      }
+      return match[1];
+    }
   }
   return null;
 }
@@ -326,4 +352,95 @@ export function applyGlobalFilters(
   log(`[global-filters] Modified SQL: ${modifiedSql}`, 'permissions');
   
   return { modifiedSql, appliedFilters };
+}
+
+export interface EntitlementEnforcementResult {
+  allowed: boolean;
+  modifiedSql?: string;
+  blockedReason?: string;
+  appliedFilters?: string[];
+}
+
+function groupEntitlementsByScope(entitlements: AiUserEntitlement[]): Map<ScopeType, string[]> {
+  const grouped = new Map<ScopeType, string[]>();
+  for (const e of entitlements) {
+    const existing = grouped.get(e.ScopeType as ScopeType) || [];
+    existing.push(e.ScopeValue);
+    grouped.set(e.ScopeType as ScopeType, existing);
+  }
+  return grouped;
+}
+
+function getColumnForScope(scopeType: ScopeType, tables: string[]): { column: string; table: string } | null {
+  const columnKey = SCOPE_TO_COLUMN_KEY[scopeType];
+  for (const table of tables) {
+    const mapping = TABLE_COLUMN_MAPPINGS[table];
+    if (mapping && mapping[columnKey]) {
+      return { column: mapping[columnKey]!, table };
+    }
+  }
+  return null;
+}
+
+export function enforceEntitlements(
+  sql: string,
+  entitlements: AiUserEntitlement[],
+  isAdmin: boolean
+): EntitlementEnforcementResult {
+  if (isAdmin) {
+    log('[entitlements] Admin user — skipping entitlement enforcement', 'permissions');
+    return { allowed: true, modifiedSql: sql, appliedFilters: [] };
+  }
+
+  if (entitlements.length === 0) {
+    log('[entitlements] User has 0 entitlements — blocking query', 'permissions');
+    return {
+      allowed: false,
+      blockedReason: 'Your permissions have not been configured yet. Please contact your administrator to set up your data access.',
+    };
+  }
+
+  const tables = extractTableNames(sql);
+  if (tables.length === 0) {
+    return { allowed: true, modifiedSql: sql, appliedFilters: [] };
+  }
+
+  const grouped = groupEntitlementsByScope(entitlements);
+  const conditions: string[] = [];
+  const appliedFilters: string[] = [];
+
+  for (const [scopeType, values] of grouped) {
+    const match = getColumnForScope(scopeType, tables);
+    if (!match) continue;
+
+    const alias = getTableAlias(sql, match.table);
+    const prefix = alias || `[publish].[${match.table}]`;
+    const escaped = values.map(v => `'${v.replace(/'/g, "''")}'`).join(', ');
+    conditions.push(`${prefix}.${match.column} IN (${escaped})`);
+    appliedFilters.push(`${scopeType}: ${values.join(', ')}`);
+  }
+
+  if (conditions.length === 0) {
+    return { allowed: true, modifiedSql: sql, appliedFilters: [] };
+  }
+
+  const filterClause = conditions.join(' AND ');
+  const modifiedSql = injectWhereClause(sql, filterClause);
+
+  log(`[entitlements] Applied filters: ${appliedFilters.join('; ')}`, 'permissions');
+  log(`[entitlements] Modified SQL: ${modifiedSql}`, 'permissions');
+
+  return { allowed: true, modifiedSql, appliedFilters };
+}
+
+export function intersectFilterOptions(
+  allValues: string[],
+  entitledValues: string[] | undefined,
+  isAdmin: boolean
+): string[] {
+  if (isAdmin || !entitledValues || entitledValues.length === 0) {
+    return allValues;
+  }
+  const entitled = new Set(entitledValues.map(v => v.toLowerCase()));
+  return allValues.filter(v => entitled.has(v.toLowerCase()));
 }

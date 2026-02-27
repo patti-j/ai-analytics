@@ -36,11 +36,12 @@ import {
   deleteUserPermissions,
 } from "./permissions-storage";
 import { userPermissionsSchema, tableAccessOptions, entitlementSaveSchema, SCOPE_TYPES } from "@shared/schema";
-import { enforcePermissions, getPermissionsForRequest, applyGlobalFilters } from "./query-permissions";
+import { enforcePermissions, getPermissionsForRequest, applyGlobalFilters, enforceEntitlements, intersectFilterOptions } from "./query-permissions";
 import { handleSessionFromEmbed, requireAdmin } from "./embed-auth";
 import {
   getUsersWithEntitlementStatus,
   getEntitlementsForUser,
+  getEntitlementsByScope,
   replaceEntitlements,
   upsertUser,
 } from "./entitlement-storage";
@@ -201,42 +202,77 @@ export async function registerRoutes(
   });
 
   // Get filter options for planning area, scenario, and plant dropdowns
-  app.get("/api/filter-options", async (_req, res) => {
+  app.get("/api/filter-options", async (req, res) => {
     try {
-      // Fetch distinct planning areas from DASHt_Resources
       const planningAreaResult = await executeQuery(
         "SELECT DISTINCT PlanningAreaName FROM [publish].[DASHt_Resources] WHERE PlanningAreaName IS NOT NULL ORDER BY PlanningAreaName"
       );
-      const planningAreas = (planningAreaResult?.recordset || []).map((r: any) => r.PlanningAreaName).filter(Boolean);
+      let planningAreas = (planningAreaResult?.recordset || []).map((r: any) => r.PlanningAreaName).filter(Boolean);
 
-      // Fetch distinct scenarios with NewScenarioId, ScenarioName, and ScenarioType
-      // NewScenarioId is the unique identifier (e.g., "BI01-8")
       const scenarioResult = await executeQuery(
         `SELECT DISTINCT NewScenarioId, ScenarioName, ScenarioType 
          FROM [publish].[DASHt_Planning] 
          WHERE NewScenarioId IS NOT NULL 
          ORDER BY ScenarioType, ScenarioName`
       );
-      const scenarios = (scenarioResult?.recordset || []).map((r: any) => ({
+      let scenarios = (scenarioResult?.recordset || []).map((r: any) => ({
         id: r.NewScenarioId,
         name: r.ScenarioName,
         type: r.ScenarioType
       })).filter((s: any) => s.id);
 
-      // Fetch distinct plants from DASHt_Resources (uses PlantName)
       const plantResult = await executeQuery(
         "SELECT DISTINCT PlantName FROM [publish].[DASHt_Resources] WHERE PlantName IS NOT NULL ORDER BY PlantName"
       );
-      const plants = (plantResult?.recordset || []).map((r: any) => r.PlantName).filter(Boolean);
+      let plants = (plantResult?.recordset || []).map((r: any) => r.PlantName).filter(Boolean);
+
+      const session = req.embedSession;
+      if (session && !session.isCompanyAdmin) {
+        try {
+          const entitlements = await getEntitlementsForUser(session.companyId, session.email);
+          if (entitlements.length === 0) {
+            return res.json({
+              planningAreas: ["All Planning Areas"],
+              scenarios: [],
+              plants: ["All Plants"],
+              noEntitlements: true,
+            });
+          }
+
+          const byScope = new Map<string, string[]>();
+          for (const e of entitlements) {
+            const vals = byScope.get(e.ScopeType) || [];
+            vals.push(e.ScopeValue);
+            byScope.set(e.ScopeType, vals);
+          }
+
+          const entitledPA = byScope.get('PlanningArea');
+          if (entitledPA) {
+            planningAreas = intersectFilterOptions(planningAreas, entitledPA, false);
+          }
+
+          const entitledScenarios = byScope.get('Scenario');
+          if (entitledScenarios) {
+            const entitled = new Set(entitledScenarios.map(s => s.toLowerCase()));
+            scenarios = scenarios.filter((s: any) => entitled.has(s.id.toLowerCase()));
+          }
+
+          const entitledPlants = byScope.get('Plant');
+          if (entitledPlants) {
+            plants = intersectFilterOptions(plants, entitledPlants, false);
+          }
+        } catch (entErr: any) {
+          log(`[filter-options] Entitlement lookup failed, showing all options: ${entErr.message}`, 'permissions');
+        }
+      }
 
       res.json({
         planningAreas: ["All Planning Areas", ...planningAreas],
-        scenarios: scenarios, // Array of {id, name, type} objects
+        scenarios: scenarios,
         plants: ["All Plants", ...plants]
       });
     } catch (error: any) {
       log(`[filter-options] Error: ${error.message}`, "error");
-      // Return defaults on error
       res.json({
         planningAreas: ["All Planning Areas"],
         scenarios: [],
@@ -768,6 +804,26 @@ export async function registerRoutes(
       if (permResult.appliedFilters && permResult.appliedFilters.length > 0) {
         log(`Permission filters applied: ${permResult.appliedFilters.join('; ')}`, 'ask-stream');
       }
+
+      if (req.embedSession) {
+        try {
+          const entitlements = await getEntitlementsForUser(req.embedSession.companyId, req.embedSession.email);
+          const entResult = enforceEntitlements(enforcedSql, entitlements, req.embedSession.isCompanyAdmin);
+          if (!entResult.allowed) {
+            log(`Entitlement denied: ${entResult.blockedReason}`, 'ask-stream');
+            sendEvent('error', { error: entResult.blockedReason || 'Access denied', isPermissionDenied: true });
+            return;
+          }
+          enforcedSql = entResult.modifiedSql || enforcedSql;
+          if (entResult.appliedFilters && entResult.appliedFilters.length > 0) {
+            log(`Entitlement filters applied: ${entResult.appliedFilters.join('; ')}`, 'ask-stream');
+          }
+        } catch (entErr: any) {
+          log(`[ask-stream] Entitlement lookup failed — blocking query (fail-closed): ${entErr.message}`, 'ask-stream');
+          sendEvent('error', { error: 'Unable to verify your data access permissions. Please try again later.', isPermissionDenied: true });
+          return;
+        }
+      }
       
       // Apply user-selected global filters (from dropdown selectors)
       const globalFilterResult = applyGlobalFilters(enforcedSql, {
@@ -1055,6 +1111,30 @@ export async function registerRoutes(
       let enforcedSql = permResult.modifiedSql || finalSql;
       if (permResult.appliedFilters && permResult.appliedFilters.length > 0) {
         log(`Permission filters applied: ${permResult.appliedFilters.join('; ')}`, 'ask');
+      }
+
+      if (req.embedSession) {
+        try {
+          const entitlements = await getEntitlementsForUser(req.embedSession.companyId, req.embedSession.email);
+          const entResult = enforceEntitlements(enforcedSql, entitlements, req.embedSession.isCompanyAdmin);
+          if (!entResult.allowed) {
+            log(`Entitlement denied: ${entResult.blockedReason}`, 'ask');
+            return res.status(403).json({
+              error: entResult.blockedReason || 'Access denied',
+              isPermissionDenied: true,
+            });
+          }
+          enforcedSql = entResult.modifiedSql || enforcedSql;
+          if (entResult.appliedFilters && entResult.appliedFilters.length > 0) {
+            log(`Entitlement filters applied: ${entResult.appliedFilters.join('; ')}`, 'ask');
+          }
+        } catch (entErr: any) {
+          log(`[ask] Entitlement lookup failed — blocking query (fail-closed): ${entErr.message}`, 'ask');
+          return res.status(503).json({
+            error: 'Unable to verify your data access permissions. Please try again later.',
+            isPermissionDenied: true,
+          });
+        }
       }
       
       // Apply user-selected global filters (from dropdown selectors)

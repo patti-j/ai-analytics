@@ -54,6 +54,7 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 - 6 scope types: PlanningArea, Plant, Scenario, Resource, Product, Workcenter
 - Admin routes at `/api/admin/entitlements/*` protected by `requireAdmin` middleware
 - User entitlements at `/api/my-entitlements` for query page filter constraining
+- **Query Enforcement (T012):** `enforceEntitlements()` in `server/query-permissions.ts` injects WHERE clauses based on user entitlements into both `/api/ask` and `/api/ask/stream`. Non-admin users with 0 entitlements are blocked. Entitlement lookup failure is fail-closed (503). Filter-options endpoint intersects dropdown values with user entitlements (non-admin only). Column mappings cover all 6 scope types across DASHt tables.
 
 **Key Server Files:**
 - `server/embed-auth.ts`: JWT validation, session store, middleware, requireAdmin
