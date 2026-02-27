@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, AlertCircle, Sparkles, ChevronDown, ChevronUp, Database, XCircle, Download, ThumbsUp, ThumbsDown, BarChart3, Heart, Trash2, Lightbulb, MessageSquare, ArrowUp, Pin, HelpCircle, Copy, Check, TableProperties } from 'lucide-react';
+import { Loader2, AlertCircle, Sparkles, ChevronDown, ChevronUp, Database, XCircle, Download, ThumbsUp, ThumbsDown, BarChart3, Heart, Trash2, Lightbulb, MessageSquare, ArrowUp, Pin, HelpCircle, Copy, Check, TableProperties, Users } from 'lucide-react';
 import { Link } from 'wouter';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { ResultChart } from '@/components/result-chart';
@@ -23,6 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useDevUser } from '@/hooks/useDevUser';
 import { useTour, type TourStep } from '@/hooks/useTour';
 import { TourOverlay } from '@/components/TourOverlay';
+import { useEmbedSession } from '@/contexts/EmbedSessionContext';
 
 const APP_VERSION = '1.2.0'; // Date formatting + mode-specific schema optimization
 
@@ -190,6 +191,7 @@ export default function QueryPage() {
   
   // Tour hook for new user onboarding
   const tour = useTour(TOUR_STEPS);
+  const { isCompanyAdmin } = useEmbedSession();
   
   // Auto-start tour for first-time users (after a short delay to ensure page is loaded)
   useEffect(() => {
@@ -678,97 +680,97 @@ export default function QueryPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/10">
-      {/* Header Bar */}
-      <div className="bg-slate-900 border-b border-slate-700">
-        <div className="max-w-6xl mx-auto px-8 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <img src="/logo.svg" alt="AI Analytics" className="h-10" />
-            </div>
-            <div className="flex items-center gap-2">
-              {!import.meta.env.PROD && devUsers.length > 0 && (
-                <Select
-                  value={devUser?.username || ''}
-                  onValueChange={(value) => {
-                    if (value === '__clear__') {
-                      clearDevUser();
-                    } else {
-                      const user = devUsers.find(u => u.username === value);
-                      if (user) setDevUser(user);
-                    }
-                  }}
-                >
-                  <SelectTrigger 
-                    className="w-[140px] h-8 text-xs bg-slate-800/50 border-slate-600 text-slate-300"
-                    data-testid="select-dev-user"
-                  >
-                    <SelectValue placeholder="Test as user..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__clear__" className="text-muted-foreground">
-                      (No user - full access)
-                    </SelectItem>
-                    {devUsers.map(u => (
-                      <SelectItem key={u.userId} value={u.username}>
-                        {u.username}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              <Link href="/dashboard" data-tour="dashboard-link">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="gap-2 text-slate-300 hover:text-white hover:bg-slate-800"
-                  data-testid="button-dashboard"
-                  title="View analytics dashboard"
-                >
-                  <BarChart3 className="h-4 w-4" />
-                  Dashboard
-                </Button>
-              </Link>
-              <a href="/matrix" target="_blank" rel="noopener noreferrer">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="gap-2 text-slate-300 hover:text-white hover:bg-slate-800"
-                  data-testid="button-matrix"
-                  title="View query matrix reference"
-                >
-                  <TableProperties className="h-4 w-4" />
-                  Matrix
-                </Button>
-              </a>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-2 text-slate-300 hover:text-white hover:bg-slate-800"
-                onClick={() => { tour.resetTour(); tour.startTour(); }}
-                data-testid="button-tour-help"
-                title="Start getting started tour"
-                aria-label="Start getting started tour"
-              >
-                <HelpCircle className="h-4 w-4" />
-              </Button>
-              <div className="[&_button]:border-slate-600 [&_button]:text-slate-300 [&_button]:hover:bg-slate-800 [&_button]:hover:text-white">
-                <ThemeToggle />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Main Content */}
       <div className="max-w-6xl mx-auto p-8 space-y-8">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-semibold text-primary">AI Analytics</h1>
-          <p className="text-sm text-muted-foreground italic">
-            Decision intelligence for PlanetTogether
-          </p>
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-semibold text-primary">AI Analytics</h1>
+            <p className="text-sm text-muted-foreground italic">
+              Decision intelligence for PlanetTogether
+            </p>
+          </div>
+          <div className="flex items-center gap-1">
+            {!import.meta.env.PROD && devUsers.length > 0 && (
+              <Select
+                value={devUser?.username || ''}
+                onValueChange={(value) => {
+                  if (value === '__clear__') {
+                    clearDevUser();
+                  } else {
+                    const user = devUsers.find(u => u.username === value);
+                    if (user) setDevUser(user);
+                  }
+                }}
+              >
+                <SelectTrigger 
+                  className="w-[140px] h-8 text-xs"
+                  data-testid="select-dev-user"
+                >
+                  <SelectValue placeholder="Test as user..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__clear__" className="text-muted-foreground">
+                    (No user - full access)
+                  </SelectItem>
+                  {devUsers.map(u => (
+                    <SelectItem key={u.userId} value={u.username}>
+                      {u.username}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Link href="/dashboard" data-tour="dashboard-link">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                data-testid="button-dashboard"
+                title="Analytics dashboard"
+              >
+                <BarChart3 className="h-4 w-4" />
+              </Button>
+            </Link>
+            <a href="/matrix" target="_blank" rel="noopener noreferrer">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                data-testid="button-matrix"
+                title="Query matrix reference"
+              >
+                <TableProperties className="h-4 w-4" />
+              </Button>
+            </a>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              onClick={() => { tour.resetTour(); tour.startTour(); }}
+              data-testid="button-tour-help"
+              title="Getting started tour"
+              aria-label="Getting started tour"
+            >
+              <HelpCircle className="h-4 w-4" />
+            </Button>
+            {isCompanyAdmin && (
+              <Link href="/admin/users">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  data-testid="button-admin-users"
+                  title="Manage user permissions"
+                >
+                  <Users className="h-4 w-4" />
+                </Button>
+              </Link>
+            )}
+            <ThemeToggle />
+          </div>
         </div>
 
-        {/* Quick Questions */}
+        {/* Quick Questions - commented out, parent WebApp provides navigation
         <div className="space-y-4" data-tour="quick-questions">
           <h2 className="text-lg font-semibold text-foreground/80">
             Quick questions
@@ -799,6 +801,7 @@ export default function QueryPage() {
             </div>
           )}
         </div>
+        */}
 
         {/* Favorite Queries - Collapsible */}
         {favorites.length > 0 && (
