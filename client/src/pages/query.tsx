@@ -111,7 +111,7 @@ interface FilterOptions {
   plants: string[];
 }
 
-function buildTourSteps(entitlements: AiUserEntitlement[], isAdmin: boolean): TourStep[] {
+function buildTourSteps(entitlements: AiUserEntitlement[], isAdmin: boolean, isPtAdmin: boolean): TourStep[] {
   const scopeLabels: Record<string, string> = {
     PlanningArea: 'Planning Area',
     Plant: 'Plant',
@@ -122,7 +122,7 @@ function buildTourSteps(entitlements: AiUserEntitlement[], isAdmin: boolean): To
   };
 
   let scopeLines = '';
-  if (isAdmin) {
+  if (isAdmin || isPtAdmin) {
     scopeLines = 'You have admin access — all data is visible to you.';
   } else if (entitlements.length === 0) {
     scopeLines = 'Your permissions have not been configured yet. Contact your administrator to get access.';
@@ -222,7 +222,7 @@ export default function QueryPage() {
   const lastScrollTopRef = useRef(0);
   
   const { isCompanyAdmin, isPtAdmin, entitlements, favorites, isFavorite, toggleFavorite, removeFavorite } = useEmbedSession();
-  const tourSteps = useMemo(() => buildTourSteps(entitlements || [], isCompanyAdmin), [entitlements, isCompanyAdmin]);
+  const tourSteps = useMemo(() => buildTourSteps(entitlements || [], isCompanyAdmin, isPtAdmin), [entitlements, isCompanyAdmin, isPtAdmin]);
   const tour = useTour(tourSteps);
   
   // Auto-start tour for first-time users (after a short delay to ensure page is loaded)

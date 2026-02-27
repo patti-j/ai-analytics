@@ -111,8 +111,11 @@ export async function handleSessionFromEmbed(req: Request, res: Response): Promi
       path: '/',
     });
 
-    const [entitlements, favRows, isPtAdmin] = await Promise.all([
-      session.isCompanyAdmin
+    const isPtAdmin = await checkUserHasPtAdminRole(session.companyId, session.email).catch(() => false);
+    const effectiveAdmin = session.isCompanyAdmin || isPtAdmin;
+
+    const [entitlements, favRows] = await Promise.all([
+      effectiveAdmin
         ? Promise.resolve([])
         : getEntitlementsForUser(session.companyId, session.email).catch(err => {
             log(`[embed-auth] Failed to load entitlements: ${err.message}`, 'embed-auth');
@@ -122,8 +125,9 @@ export async function handleSessionFromEmbed(req: Request, res: Response): Promi
         log(`[embed-auth] Failed to load favorites: ${err.message}`, 'embed-auth');
         return [];
       }),
-      checkUserHasPtAdminRole(session.companyId, session.email).catch(() => false),
     ]);
+
+    log(`[embed-auth] Session for ${session.email}: isCompanyAdmin=${session.isCompanyAdmin}, isPtAdmin=${isPtAdmin}, effectiveAdmin=${effectiveAdmin}, entitlements=${entitlements.length}`, 'embed-auth');
 
     const favorites = favRows.map(r => ({
       question: r.QuestionText,
@@ -135,10 +139,10 @@ export async function handleSessionFromEmbed(req: Request, res: Response): Promi
       session: {
         email: session.email,
         companyId: session.companyId,
-        isCompanyAdmin: session.isCompanyAdmin,
+        isCompanyAdmin: effectiveAdmin,
         expiresAt: session.expiresAt,
       },
-      isAdmin: session.isCompanyAdmin,
+      isAdmin: effectiveAdmin,
       isPtAdmin,
       entitlements,
       scopeTypes: SCOPE_TYPES,

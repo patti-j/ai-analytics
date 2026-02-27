@@ -48,12 +48,14 @@ export async function registerRoutes(
     }
     const { companyId, email, isCompanyAdmin, hasAIAnalyticsRole } = req.embedSession;
 
-    const [entitlements, favRows, isPtAdmin] = await Promise.all([
-      isCompanyAdmin
+    const isPtAdmin = await checkUserHasPtAdminRole(companyId, email).catch(() => false);
+    const effectiveAdmin = isCompanyAdmin || isPtAdmin;
+
+    const [entitlements, favRows] = await Promise.all([
+      effectiveAdmin
         ? Promise.resolve([])
         : getEntitlementsForUser(companyId, email).catch(() => []),
       getFavoritesForUser(companyId, email).catch(() => []),
-      checkUserHasPtAdminRole(companyId, email).catch(() => false),
     ]);
 
     const favorites = favRows.map(r => ({
@@ -64,10 +66,10 @@ export async function registerRoutes(
     res.json({
       email,
       companyId,
-      isCompanyAdmin,
+      isCompanyAdmin: effectiveAdmin,
       isPtAdmin,
       hasAIAnalyticsRole,
-      isAdmin: isCompanyAdmin,
+      isAdmin: effectiveAdmin,
       entitlements,
       scopeTypes: SCOPE_TYPES,
       favorites,
@@ -242,7 +244,9 @@ export async function registerRoutes(
       let plants = (plantResult?.recordset || []).map((r: any) => r.PlantName).filter(Boolean);
 
       const session = req.embedSession;
-      if (session && !session.isCompanyAdmin) {
+      const filterIsPtAdmin = session ? await checkUserHasPtAdminRole(session.companyId, session.email).catch(() => false) : false;
+      const filterEffectiveAdmin = session ? (session.isCompanyAdmin || filterIsPtAdmin) : false;
+      if (session && !filterEffectiveAdmin) {
         try {
           const entitlements = await getEntitlementsForUser(session.companyId, session.email);
           if (entitlements.length === 0) {
@@ -786,8 +790,10 @@ export async function registerRoutes(
 
       let enforcedSql = finalSql;
       try {
-        const entitlements = await getEntitlementsForUser(req.embedSession!.companyId, req.embedSession!.email);
-        const entResult = enforceEntitlements(enforcedSql, entitlements, req.embedSession!.isCompanyAdmin);
+        const isPtAdmin = await checkUserHasPtAdminRole(req.embedSession!.companyId, req.embedSession!.email).catch(() => false);
+        const effectiveAdmin = req.embedSession!.isCompanyAdmin || isPtAdmin;
+        const entitlements = effectiveAdmin ? [] : await getEntitlementsForUser(req.embedSession!.companyId, req.embedSession!.email);
+        const entResult = enforceEntitlements(enforcedSql, entitlements, effectiveAdmin);
         if (!entResult.allowed) {
           log(`Entitlement denied: ${entResult.blockedReason}`, 'ask-stream');
           sendEvent('error', { error: entResult.blockedReason || 'Access denied', isPermissionDenied: true });
@@ -1055,8 +1061,10 @@ export async function registerRoutes(
       
       let enforcedSql = finalSql;
       try {
-        const entitlements = await getEntitlementsForUser(req.embedSession!.companyId, req.embedSession!.email);
-        const entResult = enforceEntitlements(enforcedSql, entitlements, req.embedSession!.isCompanyAdmin);
+        const isPtAdmin = await checkUserHasPtAdminRole(req.embedSession!.companyId, req.embedSession!.email).catch(() => false);
+        const effectiveAdmin = req.embedSession!.isCompanyAdmin || isPtAdmin;
+        const entitlements = effectiveAdmin ? [] : await getEntitlementsForUser(req.embedSession!.companyId, req.embedSession!.email);
+        const entResult = enforceEntitlements(enforcedSql, entitlements, effectiveAdmin);
         if (!entResult.allowed) {
           log(`Entitlement denied: ${entResult.blockedReason}`, 'ask');
           return res.status(403).json({
