@@ -23,6 +23,7 @@ import {
   getEntitlementsByScope,
   replaceEntitlements,
   upsertUser,
+  getAllEntitlementsForCompany,
 } from "./entitlement-storage";
 import { syncMembership } from "./membership-sync";
 import { getFavoritesForUser, addFavorite as addFavoriteDb, removeFavorite as removeFavoriteDb } from "./favorites-storage";
@@ -228,16 +229,21 @@ export async function registerRoutes(
     try {
       const companyId = req.embedSession?.companyId;
 
-      async function safeQuery(sql: string) {
-        try { return await runPublishQuery(companyId, sql); } catch { return { recordset: [] }; }
+      async function safeQuery(label: string, sql: string) {
+        try {
+          return await runPublishQuery(companyId, sql);
+        } catch (err: any) {
+          log(`[filter-options] ${label} query failed: ${err.message}`, 'filter-options');
+          return { recordset: [] };
+        }
       }
       const [planningAreaResult, scenarioResult, plantResult, resourceResult, productResult, workcenterResult] = await Promise.all([
-        safeQuery("SELECT DISTINCT PlanningAreaName FROM [publish].[DASHt_Resources] WHERE PlanningAreaName IS NOT NULL ORDER BY PlanningAreaName"),
-        safeQuery("SELECT DISTINCT NewScenarioId, ScenarioName, ScenarioType FROM [publish].[DASHt_Planning] WHERE NewScenarioId IS NOT NULL ORDER BY ScenarioType, ScenarioName"),
-        safeQuery("SELECT DISTINCT PlantName FROM [publish].[DASHt_Resources] WHERE PlantName IS NOT NULL ORDER BY PlantName"),
-        safeQuery("SELECT DISTINCT ResourceName FROM [publish].[DASHt_Resources] WHERE ResourceName IS NOT NULL ORDER BY ResourceName"),
-        safeQuery("SELECT DISTINCT TOP 500 ProductName FROM [publish].[DASHt_Planning] WHERE ProductName IS NOT NULL ORDER BY ProductName"),
-        safeQuery("SELECT DISTINCT WorkcenterName FROM [publish].[DASHt_Resources] WHERE WorkcenterName IS NOT NULL ORDER BY WorkcenterName"),
+        safeQuery("planningArea", "SELECT DISTINCT PlanningAreaName FROM [publish].[DASHt_Resources] WHERE PlanningAreaName IS NOT NULL ORDER BY PlanningAreaName"),
+        safeQuery("scenario", "SELECT DISTINCT NewScenarioId, ScenarioName, ScenarioType FROM [publish].[DASHt_Planning] WHERE NewScenarioId IS NOT NULL ORDER BY ScenarioType, ScenarioName"),
+        safeQuery("plant", "SELECT DISTINCT PlantName FROM [publish].[DASHt_Resources] WHERE PlantName IS NOT NULL ORDER BY PlantName"),
+        safeQuery("resource", "SELECT DISTINCT ResourceName FROM [publish].[DASHt_Resources] WHERE ResourceName IS NOT NULL ORDER BY ResourceName"),
+        safeQuery("product", "SELECT DISTINCT TOP 500 ProductName FROM [publish].[DASHt_Planning] WHERE ProductName IS NOT NULL ORDER BY ProductName"),
+        safeQuery("workcenter", "SELECT DISTINCT WorkcenterName FROM [publish].[DASHt_Resources] WHERE WorkcenterName IS NOT NULL ORDER BY WorkcenterName"),
       ]);
 
       let planningAreas = (planningAreaResult?.recordset || []).map((r: any) => r.PlanningAreaName).filter(Boolean);
@@ -250,6 +256,32 @@ export async function registerRoutes(
       let resources = (resourceResult?.recordset || []).map((r: any) => r.ResourceName).filter(Boolean);
       let products = (productResult?.recordset || []).map((r: any) => r.ProductName).filter(Boolean);
       let workcenters = (workcenterResult?.recordset || []).map((r: any) => r.WorkcenterName).filter(Boolean);
+
+      const dbQueriesReturned = planningAreas.length > 0 || plants.length > 0 || resources.length > 0 || products.length > 0 || workcenters.length > 0 || scenarios.length > 0;
+
+      if (!dbQueriesReturned && companyId) {
+        log(`[filter-options] All Publish DB queries returned empty for company ${companyId}, falling back to company entitlements`, 'filter-options');
+        try {
+          const companyEntitlements = await getAllEntitlementsForCompany(companyId);
+          if (companyEntitlements.length > 0) {
+            const byScope = new Map<string, Set<string>>();
+            for (const e of companyEntitlements) {
+              if (!byScope.has(e.ScopeType)) byScope.set(e.ScopeType, new Set());
+              byScope.get(e.ScopeType)!.add(e.ScopeValue);
+            }
+            planningAreas = [...(byScope.get('PlanningArea') || [])].sort();
+            plants = [...(byScope.get('Plant') || [])].sort();
+            resources = [...(byScope.get('Resource') || [])].sort();
+            products = [...(byScope.get('Product') || [])].sort();
+            workcenters = [...(byScope.get('Workcenter') || [])].sort();
+            const scenarioVals = [...(byScope.get('Scenario') || [])].sort();
+            scenarios = scenarioVals.map(s => ({ id: s, name: s, type: '' }));
+            log(`[filter-options] Built filter options from ${companyEntitlements.length} company entitlements`, 'filter-options');
+          }
+        } catch (entErr: any) {
+          log(`[filter-options] Company entitlements fallback failed: ${entErr.message}`, 'filter-options');
+        }
+      }
 
       const session = req.embedSession;
       const filterIsPtAdmin = session ? await checkUserHasPtAdminRole(session.companyId, session.email).catch(() => false) : false;
