@@ -63,16 +63,33 @@ export async function registerRoutes(
   // Embed auth: create session from JWT token
   app.post("/api/session/from-embed", handleSessionFromEmbed);
 
-  // Get current session info
-  app.get("/api/session", (req, res) => {
+  app.get("/api/session", async (req, res) => {
     if (!req.embedSession) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
+    const { companyId, email, isCompanyAdmin, hasAIAnalyticsRole } = req.embedSession;
+
+    const [entitlements, favRows] = await Promise.all([
+      isCompanyAdmin
+        ? Promise.resolve([])
+        : getEntitlementsForUser(companyId, email).catch(() => []),
+      getFavoritesForUser(companyId, email).catch(() => []),
+    ]);
+
+    const favorites = favRows.map(r => ({
+      question: r.QuestionText,
+      savedAt: r.CreatedAt,
+    }));
+
     res.json({
-      email: req.embedSession.email,
-      companyId: req.embedSession.companyId,
-      isCompanyAdmin: req.embedSession.isCompanyAdmin,
-      hasAIAnalyticsRole: req.embedSession.hasAIAnalyticsRole,
+      email,
+      companyId,
+      isCompanyAdmin,
+      hasAIAnalyticsRole,
+      isAdmin: isCompanyAdmin,
+      entitlements,
+      scopeTypes: SCOPE_TYPES,
+      favorites,
     });
   });
 
@@ -170,44 +187,6 @@ export async function registerRoutes(
     } catch (error: any) {
       log(`[admin-entitlements] Error fetching scope values: ${error.message}`, 'error');
       res.status(500).json({ error: 'Failed to fetch scope values' });
-    }
-  });
-
-  // Get entitlements for the current user (for query page filter constraining)
-  app.get("/api/my-entitlements", async (req, res) => {
-    try {
-      if (!req.embedSession) {
-        return res.status(401).json({ error: 'Not authenticated' });
-      }
-      const { companyId, email, isCompanyAdmin } = req.embedSession;
-
-      if (isCompanyAdmin) {
-        return res.json({ isAdmin: true, entitlements: [], scopeTypes: SCOPE_TYPES });
-      }
-
-      const entitlements = await getEntitlementsForUser(companyId, email);
-      res.json({ isAdmin: false, entitlements, scopeTypes: SCOPE_TYPES });
-    } catch (error: any) {
-      log(`[entitlements] Error fetching my entitlements: ${error.message}`, 'error');
-      res.status(500).json({ error: 'Failed to fetch entitlements' });
-    }
-  });
-
-  app.get("/api/my-favorites", async (req, res) => {
-    try {
-      if (!req.embedSession) {
-        return res.status(401).json({ error: 'Not authenticated' });
-      }
-      const { companyId, email } = req.embedSession;
-      const rows = await getFavoritesForUser(companyId, email);
-      const favorites = rows.map(r => ({
-        question: r.QuestionText,
-        savedAt: r.CreatedAt,
-      }));
-      res.json({ favorites });
-    } catch (error: any) {
-      log(`[favorites] Error fetching favorites: ${error.message}`, 'error');
-      res.status(500).json({ error: 'Failed to fetch favorites' });
     }
   });
 

@@ -1,8 +1,10 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import type { Request, Response, NextFunction } from 'express';
-import { EmbedTokenPayload, EmbedSession } from '@shared/schema';
+import { EmbedTokenPayload, EmbedSession, SCOPE_TYPES } from '@shared/schema';
 import { log } from './index';
+import { getEntitlementsForUser } from './entitlement-storage';
+import { getFavoritesForUser } from './favorites-storage';
 
 const SESSION_COOKIE_NAME = 'pt_embed_session';
 const SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
@@ -87,7 +89,7 @@ export function destroySession(sessionId: string): void {
   sessions.delete(sessionId);
 }
 
-export function handleSessionFromEmbed(req: Request, res: Response): void {
+export async function handleSessionFromEmbed(req: Request, res: Response): Promise<void> {
   try {
     const { embedToken } = req.body;
     if (!embedToken || typeof embedToken !== 'string') {
@@ -108,6 +110,24 @@ export function handleSessionFromEmbed(req: Request, res: Response): void {
       path: '/',
     });
 
+    const [entitlements, favRows] = await Promise.all([
+      session.isCompanyAdmin
+        ? Promise.resolve([])
+        : getEntitlementsForUser(session.companyId, session.email).catch(err => {
+            log(`[embed-auth] Failed to load entitlements: ${err.message}`, 'embed-auth');
+            return [];
+          }),
+      getFavoritesForUser(session.companyId, session.email).catch(err => {
+        log(`[embed-auth] Failed to load favorites: ${err.message}`, 'embed-auth');
+        return [];
+      }),
+    ]);
+
+    const favorites = favRows.map(r => ({
+      question: r.QuestionText,
+      savedAt: r.CreatedAt,
+    }));
+
     res.json({
       ok: true,
       session: {
@@ -116,6 +136,10 @@ export function handleSessionFromEmbed(req: Request, res: Response): void {
         isCompanyAdmin: session.isCompanyAdmin,
         expiresAt: session.expiresAt,
       },
+      isAdmin: session.isCompanyAdmin,
+      entitlements,
+      scopeTypes: SCOPE_TYPES,
+      favorites,
     });
   } catch (error: any) {
     log(`[embed-auth] Token validation failed: ${error.message}`, 'embed-auth');

@@ -2,42 +2,26 @@ import sql from 'mssql';
 import { log } from './index';
 
 function getWebAppConfig(): sql.config {
-  const databaseUrl = process.env.WEBAPP_DATABASE_URL;
-  if (databaseUrl) {
-    const params: Record<string, string> = {};
-    databaseUrl.split(';').forEach(pair => {
-      const eqIndex = pair.indexOf('=');
-      if (eqIndex > 0) {
-        const key = pair.substring(0, eqIndex).trim().toLowerCase();
-        const value = pair.substring(eqIndex + 1).trim();
-        if (key && value) params[key] = value;
-      }
-    });
-
-    return {
-      server: params['server']?.replace('tcp:', '').split(',')[0] || '',
-      database: params['initial catalog'] || params['database'] || '',
-      user: params['user id'] || params['uid'] || '',
-      password: params['password'] || params['pwd'] || '',
-      options: {
-        encrypt: true,
-        trustServerCertificate: false,
-        connectTimeout: 30000,
-        requestTimeout: 30000,
-      },
-      pool: {
-        max: 5,
-        min: 0,
-        idleTimeoutMillis: 30000,
-      },
-    };
+  const connectionString = process.env.WEBAPP_DB_CONNECTION_STRING;
+  if (!connectionString) {
+    return { server: '', database: '', user: '', password: '', options: { encrypt: true } } as sql.config;
   }
 
+  const params: Record<string, string> = {};
+  connectionString.split(';').forEach(pair => {
+    const eqIndex = pair.indexOf('=');
+    if (eqIndex > 0) {
+      const key = pair.substring(0, eqIndex).trim().toLowerCase();
+      const value = pair.substring(eqIndex + 1).trim();
+      if (key && value) params[key] = value;
+    }
+  });
+
   return {
-    server: process.env.WEBAPP_SQL_SERVER || '',
-    database: process.env.WEBAPP_SQL_DATABASE || 'pt_webapp_dev',
-    user: process.env.WEBAPP_SQL_USER || '',
-    password: process.env.WEBAPP_SQL_PASSWORD || '',
+    server: params['server']?.replace('tcp:', '').split(',')[0] || '',
+    database: params['initial catalog'] || params['database'] || '',
+    user: params['user id'] || params['uid'] || '',
+    password: params['password'] || params['pwd'] || '',
     options: {
       encrypt: true,
       trustServerCertificate: false,
@@ -59,15 +43,15 @@ const hasWebAppCredentials = Boolean(
 );
 
 if (!hasWebAppCredentials) {
-  log('[db-webapp] WARNING: WebApp database credentials not found. User management will not work.', 'db-webapp');
-  log('[db-webapp] Set WEBAPP_DATABASE_URL or WEBAPP_SQL_SERVER/DATABASE/USER/PASSWORD in secrets.', 'db-webapp');
+  log('[db-webapp] WARNING: WEBAPP_DB_CONNECTION_STRING not found. User/entitlement/favorites management will not work.', 'db-webapp');
+  log('[db-webapp] Set WEBAPP_DB_CONNECTION_STRING in secrets.', 'db-webapp');
 }
 
 let webAppPool: sql.ConnectionPool | null = null;
 
 export async function getWebAppPool(): Promise<sql.ConnectionPool> {
   if (!hasWebAppCredentials) {
-    throw new Error('WebApp database credentials not configured. Set WEBAPP_DATABASE_URL or discrete WEBAPP_SQL_* secrets.');
+    throw new Error('WEBAPP_DB_CONNECTION_STRING not configured.');
   }
 
   if (webAppPool && webAppPool.connected) {

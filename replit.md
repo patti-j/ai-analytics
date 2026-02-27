@@ -45,17 +45,19 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 - Dev bypass mode: when `EMBED_TOKEN_SECRET` is not set in development, sessions auto-create with `x-username`/`x-company-id`/`x-is-admin` headers
 
 **Multi-Tenant Database Access:**
-- `server/db-webapp.ts`: Connection to `pt_webapp_dev` database for user/entitlement management (uses `WEBAPP_DATABASE_URL` or `WEBAPP_SQL_*` env vars)
+- `server/db-webapp.ts`: Connection to webapp database via `WEBAPP_DB_CONNECTION_STRING` (ADO.NET format)
 - `server/db-publish.ts`: Dynamic per-company Publish DB pools looked up from `CompanyDbs` table in webapp DB
 - `server/db-azure.ts`: Original single-tenant connection used for query execution (fallback)
 
-**Entitlement Management (DB-backed, replaces JSON permissions):**
-- `server/entitlement-storage.ts`: CRUD for `dbo.AiAnalyticsUser` and `dbo.AiUserEntitlement` tables
-- `server/membership-sync.ts`: Syncs users with AI_Analytics role from webapp's User/Role/UserRole tables
+**3 AI Tables (all in webapp DB, all loaded at session init):**
+- `dbo.AiAnalyticsUser` — user records (CompanyId + UserEmail PK)
+- `dbo.AiUserEntitlement` — scope-based permissions (CompanyId + UserEmail + ScopeType + ScopeValue PK)
+- `dbo.AiUserFavorite` — saved questions (CompanyId + UserEmail + QuestionText PK)
+- Entitlements and favorites are bundled into `/api/session/from-embed` and `/api/session` responses (no separate GET endpoints)
+- Favorites mutations via POST/DELETE `/api/my-favorites`
+- Admin CRUD at `/api/admin/entitlements/*` protected by `requireAdmin` middleware
 - 6 scope types: PlanningArea, Plant, Scenario, Resource, Product, Workcenter
-- Admin routes at `/api/admin/entitlements/*` protected by `requireAdmin` middleware
-- User entitlements at `/api/my-entitlements` for query page filter constraining
-- **Query Enforcement (T012):** `enforceEntitlements()` in `server/query-permissions.ts` injects WHERE clauses based on user entitlements into both `/api/ask` and `/api/ask/stream`. Non-admin users with 0 entitlements are blocked. Entitlement lookup failure is fail-closed (503). Filter-options endpoint intersects dropdown values with user entitlements (non-admin only). Column mappings cover all 6 scope types across DASHt tables.
+- **Query Enforcement:** `enforceEntitlements()` in `server/query-permissions.ts` injects WHERE clauses based on user entitlements into both `/api/ask` and `/api/ask/stream`. Non-admin users with 0 entitlements are blocked. Entitlement lookup failure is fail-closed (503). Filter-options endpoint intersects dropdown values with user entitlements (non-admin only). Column mappings cover all 6 scope types across DASHt tables.
 
 **Key Server Files:**
 - `server/embed-auth.ts`: JWT validation, session store, middleware, requireAdmin
@@ -78,7 +80,7 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 
 **Environment Variables Required:**
 - `EMBED_TOKEN_SECRET`: Secret for JWT validation (required in production, optional for dev bypass)
-- `WEBAPP_DATABASE_URL` or `WEBAPP_SQL_SERVER/DATABASE/USER/PASSWORD`: pt_webapp_dev connection
+- `WEBAPP_DB_CONNECTION_STRING`: ADO.NET connection string for webapp database (AiAnalyticsUser, AiUserEntitlement, AiUserFavorite tables)
 - `PUBLISH_DB_PASSWORD`: Password for per-company Publish DB connections
 - `DATABASE_URL`: Existing Azure SQL Publish DB connection (for single-tenant fallback)
 

@@ -22,8 +22,6 @@ interface EmbedSessionState {
 }
 
 interface EmbedSessionContextValue extends EmbedSessionState {
-  refreshEntitlements: () => Promise<void>;
-  refreshFavorites: () => Promise<void>;
   addFavorite: (question: string) => void;
   removeFavorite: (question: string) => void;
   toggleFavorite: (question: string) => void;
@@ -63,6 +61,18 @@ function applyTheme(theme: 'dark' | 'light') {
   window.dispatchEvent(new CustomEvent('theme-override', { detail: theme }));
 }
 
+function applySessionData(data: any): Partial<EmbedSessionState> {
+  return {
+    entitlements: data.entitlements || [],
+    entitlementsLoaded: true,
+    favorites: (data.favorites || []).map((f: any) => ({
+      question: f.question,
+      savedAt: f.savedAt,
+    })),
+    favoritesLoaded: true,
+  };
+}
+
 export function EmbedSessionProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<EmbedSessionState>({
     isAuthenticated: false,
@@ -78,39 +88,6 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
     favoritesLoaded: false,
     isEmbedded: window.parent !== window,
   });
-
-  const loadEntitlements = useCallback(async () => {
-    try {
-      const res = await fetch('/api/my-entitlements', { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        setState(prev => ({
-          ...prev,
-          entitlements: data.entitlements || [],
-          entitlementsLoaded: true,
-        }));
-      }
-    } catch (err) {
-      console.error('[embed-session] Failed to load entitlements:', err);
-    }
-  }, []);
-
-  const loadFavorites = useCallback(async () => {
-    try {
-      const res = await fetch('/api/my-favorites', { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        setState(prev => ({
-          ...prev,
-          favorites: data.favorites || [],
-          favoritesLoaded: true,
-        }));
-      }
-    } catch (err) {
-      console.error('[embed-session] Failed to load favorites:', err);
-      setState(prev => ({ ...prev, favoritesLoaded: true }));
-    }
-  }, []);
 
   const addFavorite = useCallback((question: string) => {
     const trimmed = question.trim();
@@ -188,9 +165,8 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
         isCompanyAdmin: data.session.isCompanyAdmin,
         hasAIAnalyticsRole: true,
         error: null,
+        ...applySessionData(data),
       }));
-
-      await Promise.all([loadEntitlements(), loadFavorites()]);
     } catch (err: any) {
       setState(prev => ({
         ...prev,
@@ -198,7 +174,7 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
         error: err.message || 'Authentication failed',
       }));
     }
-  }, [loadEntitlements, loadFavorites]);
+  }, []);
 
   useEffect(() => {
     const isEmbedded = window.parent !== window;
@@ -272,8 +248,8 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
           companyId: data.companyId,
           isCompanyAdmin: data.isCompanyAdmin,
           hasAIAnalyticsRole: data.hasAIAnalyticsRole,
+          ...applySessionData(data),
         }));
-        await Promise.all([loadEntitlements(), loadFavorites()]);
       } else if (!import.meta.env.PROD) {
         console.info('[embed-session] No active session in dev mode — allowing standalone access');
         setState(prev => ({
@@ -318,8 +294,6 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
 
   const contextValue: EmbedSessionContextValue = {
     ...state,
-    refreshEntitlements: loadEntitlements,
-    refreshFavorites: loadFavorites,
     addFavorite,
     removeFavorite: removeFavoriteByQuestion,
     toggleFavorite,
