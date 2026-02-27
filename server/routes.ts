@@ -568,9 +568,9 @@ export async function registerRoutes(
       });
     } catch (error: any) {
       log(`Last update fetch failed: ${error.message}`, 'last-update');
-      res.status(500).json({
-        ok: false,
-        error: 'Failed to fetch last update date',
+      res.json({
+        ok: true,
+        lastUpdate: null,
       });
     }
   });
