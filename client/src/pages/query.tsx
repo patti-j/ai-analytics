@@ -726,6 +726,19 @@ export default function QueryPage() {
             </p>
           </div>
           <div className="flex items-center gap-1">
+            {isCompanyAdmin && (
+              <Link href="/admin/users">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  data-testid="button-admin-users"
+                  title="Manage user permissions"
+                >
+                  <Users className="h-4 w-4" />
+                </Button>
+              </Link>
+            )}
             {isPtAdmin && (
               <Link href="/dashboard" data-tour="dashboard-link">
                 <Button
