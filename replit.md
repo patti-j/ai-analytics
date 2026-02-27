@@ -29,12 +29,53 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 - **Query Performance Monitoring:** An analytics dashboard (`/dashboard`) provides metrics on query performance, success rates, latency, and error analytics.
 - **User Permissions Enforcement:** Server-side enforcement injects WHERE clauses based on user permissions (`Planning Areas`, `Scenarios`, `Plants`) and restricts access to sensitive tables like `DASHt_SalesOrders` for non-admin users.
 - **Pinned Dashboard:** Users can pin favorite queries to a personal dashboard for quick access, storing up to 20 items locally with cached results.
-- **User Permissions Admin Page:** An admin-only page (`/admin/permissions`) allows managing user access restrictions based on Planning Area, Scenario, Plant, and Table Access, stored in `data/user-permissions.json`.
 - **Global Filters:** Three dropdown filters (Planning Area, Scenario, Plant) are available in the UI, applied to all queries.
 - **SSE Streaming:** Full SSE streaming support (`/api/ask/stream`) with typing effects and a stop button is available, auto-enabled in Azure deployments.
 - **ScenarioType Filtering:** `DASHt_Planning` and `DASHt_SalesOrders` queries use the user's selected scenario from the dropdown filter.
 - **Invalid Filter Validation:** The system provides helpful messages and valid alternatives when a query returns 0 results due to non-existent filter values.
 - **Simulated Today:** An anchor date can be configured (e.g., `VITE_DEV_FIXED_TODAY` or `SIMULATED_TODAY`) for all date-relative queries.
+
+## Embed Auth & Multi-Tenant Architecture
+
+**Iframe Embedding:** The app supports iframe embedding within a Blazor WebApp parent via JWT-based embed auth handshake:
+- Parent sends `PT.EMBED.AUTH` postMessage with JWT embed token
+- App validates JWT (iss=PlanetTogether.WebApp, aud=PlanetTogether.EmbedApp) using `EMBED_TOKEN_SECRET`
+- Creates 8-hour HttpOnly cookie session (`pt_embed_session`) in memory
+- Dev bypass mode: when `EMBED_TOKEN_SECRET` is not set in development, sessions auto-create with `x-username`/`x-company-id`/`x-is-admin` headers
+
+**Multi-Tenant Database Access:**
+- `server/db-webapp.ts`: Connection to `pt_webapp_dev` database for user/entitlement management (uses `WEBAPP_DATABASE_URL` or `WEBAPP_SQL_*` env vars)
+- `server/db-publish.ts`: Dynamic per-company Publish DB pools looked up from `CompanyDbs` table in webapp DB
+- `server/db-azure.ts`: Original single-tenant connection used for query execution (fallback)
+
+**Entitlement Management (DB-backed, replaces JSON permissions):**
+- `server/entitlement-storage.ts`: CRUD for `dbo.AiAnalyticsUser` and `dbo.AiUserEntitlement` tables
+- `server/membership-sync.ts`: Syncs users with AI_Analytics role from webapp's User/Role/UserRole tables
+- 6 scope types: PlanningArea, Plant, Scenario, Resource, Product, Workcenter
+- Admin routes at `/api/admin/entitlements/*` protected by `requireAdmin` middleware
+- User entitlements at `/api/my-entitlements` for query page filter constraining
+
+**Key Server Files:**
+- `server/embed-auth.ts`: JWT validation, session store, middleware, requireAdmin
+- `server/db-webapp.ts`: pt_webapp_dev connection pool
+- `server/db-publish.ts`: Dynamic per-company Publish DB pools
+- `server/entitlement-storage.ts`: AiAnalyticsUser & AiUserEntitlement CRUD
+- `server/membership-sync.ts`: AI_Analytics role membership sync
+
+**Key Frontend Files:**
+- `client/src/contexts/EmbedSessionContext.tsx`: PostMessage listener, session management, entitlements loading
+- `client/src/pages/admin-users.tsx`: Admin page for managing user entitlements (/admin/users)
+- `client/src/pages/admin-permissions.tsx`: Legacy admin page for JSON-file permissions (/admin/permissions)
+
+**Environment Variables Required:**
+- `EMBED_TOKEN_SECRET`: Secret for JWT validation (required in production, optional for dev bypass)
+- `WEBAPP_DATABASE_URL` or `WEBAPP_SQL_SERVER/DATABASE/USER/PASSWORD`: pt_webapp_dev connection
+- `PUBLISH_DB_PASSWORD`: Password for per-company Publish DB connections
+- `DATABASE_URL`: Existing Azure SQL Publish DB connection (for single-tenant fallback)
+
+## Legacy Admin Permissions
+
+- **User Permissions Admin Page:** Legacy admin page (`/admin/permissions`) manages user access via `data/user-permissions.json`. Being replaced by DB-backed entitlements at `/admin/users`.
 
 ## Maintenance Scripts
 

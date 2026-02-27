@@ -42,3 +42,9 @@ waitForPort = 5000
 
 [agent]
 mockupState = "FULLSTACK"
+expertMode = true
+
+[userenv]
+
+[userenv.shared]
+EMBED_TOKEN_SECRET = "aOVdRPs56RnozN9TlcRo4WUl5ndqaPzOKdWj6hR3Sw4="

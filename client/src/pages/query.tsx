@@ -865,7 +865,7 @@ export default function QueryPage() {
                         <SelectValue placeholder="Select planning area" />
                       </SelectTrigger>
                       <SelectContent>
-                        {filterOptions.planningAreas.map((area) => (
+                        {(filterOptions.planningAreas || []).map((area) => (
                           <SelectItem key={area} value={area} data-testid={`option-planning-area-${area}`}>
                             {area}
                           </SelectItem>
@@ -883,7 +883,7 @@ export default function QueryPage() {
                         <SelectItem value="__all__" data-testid="option-scenario-all">
                           All Scenarios
                         </SelectItem>
-                        {filterOptions.scenarios.map((scenario) => (
+                        {(filterOptions.scenarios || []).map((scenario) => (
                           <SelectItem key={scenario.id} value={scenario.id} data-testid={`option-scenario-${scenario.id}`}>
                             {scenario.id} - {scenario.name} ({scenario.type})
                           </SelectItem>
@@ -898,7 +898,7 @@ export default function QueryPage() {
                         <SelectValue placeholder="Select plant" />
                       </SelectTrigger>
                       <SelectContent>
-                        {filterOptions.plants.map((plant) => (
+                        {(filterOptions.plants || []).map((plant) => (
                           <SelectItem key={plant} value={plant} data-testid={`option-plant-${plant}`}>
                             {plant}
                           </SelectItem>

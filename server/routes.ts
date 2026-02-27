@@ -35,8 +35,18 @@ import {
   createOrUpdateUserPermissions,
   deleteUserPermissions,
 } from "./permissions-storage";
-import { userPermissionsSchema, tableAccessOptions } from "@shared/schema";
+import { userPermissionsSchema, tableAccessOptions, entitlementSaveSchema, SCOPE_TYPES } from "@shared/schema";
 import { enforcePermissions, getPermissionsForRequest, applyGlobalFilters } from "./query-permissions";
+import { handleSessionFromEmbed, requireAdmin } from "./embed-auth";
+import {
+  getUsersWithEntitlementStatus,
+  getEntitlementsForUser,
+  replaceEntitlements,
+  upsertUser,
+} from "./entitlement-storage";
+import { syncMembership } from "./membership-sync";
+import { isWebAppConfigured } from "./db-webapp";
+import { executePublishQuery } from "./db-publish";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -46,6 +56,139 @@ export async function registerRoutes(
   // Health check endpoint
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });
+  });
+
+  // Embed auth: create session from JWT token
+  app.post("/api/session/from-embed", handleSessionFromEmbed);
+
+  // Get current session info
+  app.get("/api/session", (req, res) => {
+    if (!req.embedSession) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    res.json({
+      email: req.embedSession.email,
+      companyId: req.embedSession.companyId,
+      isCompanyAdmin: req.embedSession.isCompanyAdmin,
+      hasAIAnalyticsRole: req.embedSession.hasAIAnalyticsRole,
+    });
+  });
+
+  // ===== ADMIN ENTITLEMENT ENDPOINTS (new DB-backed) =====
+
+  // List all users for company with entitlement status (triggers membership sync)
+  app.get("/api/admin/entitlements/users", requireAdmin, async (req, res) => {
+    try {
+      const companyId = req.embedSession!.companyId;
+
+      if (isWebAppConfigured()) {
+        try {
+          await syncMembership(companyId);
+        } catch (syncErr: any) {
+          log(`[admin-entitlements] Membership sync failed: ${syncErr.message}`, 'admin-entitlements');
+        }
+      }
+
+      const users = await getUsersWithEntitlementStatus(companyId);
+      res.json({ users });
+    } catch (error: any) {
+      log(`[admin-entitlements] Error fetching users: ${error.message}`, 'error');
+      res.status(500).json({ error: 'Failed to fetch users' });
+    }
+  });
+
+  // Get entitlements for a specific user
+  app.get("/api/admin/entitlements/users/:email", requireAdmin, async (req, res) => {
+    try {
+      const companyId = req.embedSession!.companyId;
+      const email = decodeURIComponent(req.params.email);
+      const entitlements = await getEntitlementsForUser(companyId, email);
+      res.json({ email, entitlements });
+    } catch (error: any) {
+      log(`[admin-entitlements] Error fetching entitlements: ${error.message}`, 'error');
+      res.status(500).json({ error: 'Failed to fetch entitlements' });
+    }
+  });
+
+  // Save entitlements for a user (replace all)
+  app.put("/api/admin/entitlements/users/:email", requireAdmin, async (req, res) => {
+    try {
+      const companyId = req.embedSession!.companyId;
+      const email = decodeURIComponent(req.params.email);
+      const grantedByEmail = req.embedSession!.email;
+
+      const parseResult = entitlementSaveSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: 'Invalid entitlement data', details: parseResult.error.format() });
+      }
+
+      await upsertUser(companyId, email, true);
+      await replaceEntitlements(companyId, email, parseResult.data.scopes, grantedByEmail);
+
+      const entitlements = await getEntitlementsForUser(companyId, email);
+      res.json({ ok: true, email, entitlements });
+    } catch (error: any) {
+      log(`[admin-entitlements] Error saving entitlements: ${error.message}`, 'error');
+      res.status(500).json({ error: 'Failed to save entitlements' });
+    }
+  });
+
+  // Get available scope values from Publish DB (for entitlement checkbox lists)
+  app.get("/api/admin/entitlements/scope-values/:scopeType", requireAdmin, async (req, res) => {
+    try {
+      const scopeType = req.params.scopeType;
+      if (!SCOPE_TYPES.includes(scopeType as any)) {
+        return res.status(400).json({ error: `Invalid scope type: ${scopeType}` });
+      }
+
+      const scopeQueries: Record<string, string> = {
+        PlanningArea: "SELECT DISTINCT PlanningAreaName AS value FROM [publish].[DASHt_Resources] WHERE PlanningAreaName IS NOT NULL ORDER BY PlanningAreaName",
+        Plant: "SELECT DISTINCT PlantName AS value FROM [publish].[DASHt_Resources] WHERE PlantName IS NOT NULL ORDER BY PlantName",
+        Scenario: "SELECT DISTINCT NewScenarioId AS value FROM [publish].[DASHt_Planning] WHERE NewScenarioId IS NOT NULL ORDER BY NewScenarioId",
+        Resource: "SELECT DISTINCT ResourceName AS value FROM [publish].[DASHt_Resources] WHERE ResourceName IS NOT NULL ORDER BY ResourceName",
+        Product: "SELECT DISTINCT ProductName AS value FROM [publish].[DASHt_Planning] WHERE ProductName IS NOT NULL ORDER BY ProductName",
+        Workcenter: "SELECT DISTINCT WorkcenterName AS value FROM [publish].[DASHt_Resources] WHERE WorkcenterName IS NOT NULL ORDER BY WorkcenterName",
+      };
+
+      const query = scopeQueries[scopeType];
+      if (!query) {
+        return res.status(400).json({ error: `No query defined for scope type: ${scopeType}` });
+      }
+
+      const companyId = req.embedSession!.companyId;
+      let result;
+      try {
+        result = await executePublishQuery(companyId, query);
+      } catch (publishErr: any) {
+        log(`[admin-entitlements] Publish DB query failed for company ${companyId}, falling back to default: ${publishErr.message}`, 'admin-entitlements');
+        result = await executeQuery(query);
+      }
+      const values = (result?.recordset || []).map((r: any) => r.value).filter(Boolean);
+      res.json({ scopeType, values });
+    } catch (error: any) {
+      log(`[admin-entitlements] Error fetching scope values: ${error.message}`, 'error');
+      res.status(500).json({ error: 'Failed to fetch scope values' });
+    }
+  });
+
+  // Get entitlements for the current user (for query page filter constraining)
+  app.get("/api/my-entitlements", async (req, res) => {
+    try {
+      if (!req.embedSession) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      const { companyId, email, isCompanyAdmin } = req.embedSession;
+
+      if (isCompanyAdmin) {
+        return res.json({ isAdmin: true, entitlements: [], scopeTypes: SCOPE_TYPES });
+      }
+
+      const entitlements = await getEntitlementsForUser(companyId, email);
+      res.json({ isAdmin: false, entitlements, scopeTypes: SCOPE_TYPES });
+    } catch (error: any) {
+      log(`[entitlements] Error fetching my entitlements: ${error.message}`, 'error');
+      res.status(500).json({ error: 'Failed to fetch entitlements' });
+    }
   });
 
   // Get runtime config (simulated date for testing)

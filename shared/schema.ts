@@ -64,3 +64,62 @@ export const userPermissionsSchema = z.object({
 });
 
 export type InsertUserPermissions = z.infer<typeof userPermissionsSchema>;
+
+export const SCOPE_TYPES = ['PlanningArea', 'Plant', 'Scenario', 'Resource', 'Product', 'Workcenter'] as const;
+export type ScopeType = typeof SCOPE_TYPES[number];
+
+export interface AiAnalyticsUser {
+  CompanyId: number;
+  UserEmail: string;
+  IsActive: boolean;
+  CreatedAt: string;
+  UpdatedAt: string;
+}
+
+export interface AiUserEntitlement {
+  CompanyId: number;
+  UserEmail: string;
+  ScopeType: ScopeType;
+  ScopeValue: string;
+  GrantedByEmail: string;
+  GrantedAt: string;
+}
+
+export interface EmbedTokenPayload {
+  email: string;
+  companyId: number;
+  hasAIAnalyticsRole: boolean;
+  isCompanyAdmin: boolean;
+  iss: string;
+  aud: string;
+  iat: number;
+  exp: number;
+}
+
+export interface EmbedSession {
+  sessionId: string;
+  email: string;
+  companyId: number;
+  isCompanyAdmin: boolean;
+  hasAIAnalyticsRole: boolean;
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface EmbedAuthMessage {
+  type: 'PT.EMBED.AUTH';
+  version: number;
+  payload: {
+    embedToken: string;
+    ui: {
+      theme: 'dark' | 'light';
+    };
+  };
+}
+
+export const entitlementSaveSchema = z.object({
+  scopes: z.array(z.object({
+    scopeType: z.enum(SCOPE_TYPES),
+    scopeValue: z.string(),
+  })),
+});
