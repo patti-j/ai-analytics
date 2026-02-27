@@ -47,6 +47,16 @@ function extractTableNames(sql: string): string[] {
   return Array.from(new Set(tables));
 }
 
+function getColumnForScopeInTables(scopeKey: keyof TableColumnMapping, tables: string[]): string | null {
+  for (const table of tables) {
+    const mapping = TABLE_COLUMN_MAPPINGS[table];
+    if (mapping && mapping[scopeKey]) {
+      return mapping[scopeKey]!;
+    }
+  }
+  return null;
+}
+
 function getPlantColumnForTables(tables: string[]): string | null {
   for (const table of tables) {
     const mapping = TABLE_COLUMN_MAPPINGS[table];
@@ -137,6 +147,9 @@ export interface GlobalFilters {
   scenario?: string | null;
   scenarioId?: string | null;
   plant?: string | null;
+  resource?: string | null;
+  product?: string | null;
+  workcenter?: string | null;
 }
 
 export function applyGlobalFilters(
@@ -169,6 +182,33 @@ export function applyGlobalFilters(
       const value = filters.plant.replace(/'/g, "''");
       conditions.push(`${plantColumn} = '${value}'`);
       appliedFilters.push(`Plant: ${filters.plant}`);
+    }
+  }
+
+  if (filters.resource && filters.resource !== 'All Resources') {
+    const match = getColumnForScopeInTables('resource', tables);
+    if (match) {
+      const value = filters.resource.replace(/'/g, "''");
+      conditions.push(`${match} = '${value}'`);
+      appliedFilters.push(`Resource: ${filters.resource}`);
+    }
+  }
+
+  if (filters.product && filters.product !== 'All Products') {
+    const match = getColumnForScopeInTables('product', tables);
+    if (match) {
+      const value = filters.product.replace(/'/g, "''");
+      conditions.push(`${match} = '${value}'`);
+      appliedFilters.push(`Product: ${filters.product}`);
+    }
+  }
+
+  if (filters.workcenter && filters.workcenter !== 'All Workcenters') {
+    const match = getColumnForScopeInTables('workcenter', tables);
+    if (match) {
+      const value = filters.workcenter.replace(/'/g, "''");
+      conditions.push(`${match} = '${value}'`);
+      appliedFilters.push(`Workcenter: ${filters.workcenter}`);
     }
   }
 

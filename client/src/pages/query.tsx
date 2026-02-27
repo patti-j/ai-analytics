@@ -109,6 +109,9 @@ interface FilterOptions {
   planningAreas: string[];
   scenarios: ScenarioOption[];
   plants: string[];
+  resources: string[];
+  products: string[];
+  workcenters: string[];
 }
 
 function buildTourSteps(entitlements: AiUserEntitlement[], isAdmin: boolean, isPtAdmin: boolean): TourStep[] {
@@ -187,10 +190,13 @@ export default function QueryPage() {
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   
   // Global filter state
-  const [filterOptions, setFilterOptions] = useState<FilterOptions>({ planningAreas: ['All Planning Areas'], scenarios: [], plants: ['All Plants'] });
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({ planningAreas: ['All Planning Areas'], scenarios: [], plants: ['All Plants'], resources: ['All Resources'], products: ['All Products'], workcenters: ['All Workcenters'] });
   const [selectedPlanningArea, setSelectedPlanningArea] = useState('All Planning Areas');
-  const [selectedScenarioId, setSelectedScenarioId] = useState<string>(''); // Empty = All Scenarios, otherwise NewScenarioId
+  const [selectedScenarioId, setSelectedScenarioId] = useState<string>('');
   const [selectedPlant, setSelectedPlant] = useState('All Plants');
+  const [selectedResource, setSelectedResource] = useState('All Resources');
+  const [selectedProduct, setSelectedProduct] = useState('All Products');
+  const [selectedWorkcenter, setSelectedWorkcenter] = useState('All Workcenters');
   const [showFeedbackComment, setShowFeedbackComment] = useState(false);
   const [feedbackComment, setFeedbackComment] = useState('');
   const [dateTimeColumns, setDateTimeColumns] = useState<Set<string>>(new Set());
@@ -367,7 +373,10 @@ export default function QueryPage() {
           filters: {
             planningArea: selectedPlanningArea !== 'All Planning Areas' ? selectedPlanningArea : null,
             scenarioId: selectedScenarioId || null,
-            plant: selectedPlant !== 'All Plants' ? selectedPlant : null
+            plant: selectedPlant !== 'All Plants' ? selectedPlant : null,
+            resource: selectedResource !== 'All Resources' ? selectedResource : null,
+            product: selectedProduct !== 'All Products' ? selectedProduct : null,
+            workcenter: selectedWorkcenter !== 'All Workcenters' ? selectedWorkcenter : null,
           }
         }),
       });
@@ -512,6 +521,15 @@ export default function QueryPage() {
     }
     if (selectedPlant && selectedPlant !== 'All Plants') {
       filterParams.set('filterPlant', selectedPlant);
+    }
+    if (selectedResource && selectedResource !== 'All Resources') {
+      filterParams.set('filterResource', selectedResource);
+    }
+    if (selectedProduct && selectedProduct !== 'All Products') {
+      filterParams.set('filterProduct', selectedProduct);
+    }
+    if (selectedWorkcenter && selectedWorkcenter !== 'All Workcenters') {
+      filterParams.set('filterWorkcenter', selectedWorkcenter);
     }
     const filterStr = filterParams.toString();
     const url = `/api/ask/stream?question=${encodeURIComponent(queryToSend)}&publishDate=${encodeURIComponent(anchorDateStr)}${filterStr ? '&' + filterStr : ''}`;
@@ -894,6 +912,51 @@ export default function QueryPage() {
                         {(filterOptions.plants || []).map((plant) => (
                           <SelectItem key={plant} value={plant} data-testid={`option-plant-${plant}`}>
                             {plant}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="resource-filter" className="text-sm font-medium whitespace-nowrap">Resource:</Label>
+                    <Select value={selectedResource} onValueChange={setSelectedResource}>
+                      <SelectTrigger id="resource-filter" className="w-[160px] h-8 text-sm" data-testid="select-resource">
+                        <SelectValue placeholder="Select resource" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(filterOptions.resources || []).map((resource) => (
+                          <SelectItem key={resource} value={resource} data-testid={`option-resource-${resource}`}>
+                            {resource}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="product-filter" className="text-sm font-medium whitespace-nowrap">Product:</Label>
+                    <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+                      <SelectTrigger id="product-filter" className="w-[160px] h-8 text-sm" data-testid="select-product">
+                        <SelectValue placeholder="Select product" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(filterOptions.products || []).map((product) => (
+                          <SelectItem key={product} value={product} data-testid={`option-product-${product}`}>
+                            {product}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="workcenter-filter" className="text-sm font-medium whitespace-nowrap">Workcenter:</Label>
+                    <Select value={selectedWorkcenter} onValueChange={setSelectedWorkcenter}>
+                      <SelectTrigger id="workcenter-filter" className="w-[160px] h-8 text-sm" data-testid="select-workcenter">
+                        <SelectValue placeholder="Select workcenter" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(filterOptions.workcenters || []).map((wc) => (
+                          <SelectItem key={wc} value={wc} data-testid={`option-workcenter-${wc}`}>
+                            {wc}
                           </SelectItem>
                         ))}
                       </SelectContent>

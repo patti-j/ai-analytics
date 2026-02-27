@@ -243,6 +243,21 @@ export async function registerRoutes(
       );
       let plants = (plantResult?.recordset || []).map((r: any) => r.PlantName).filter(Boolean);
 
+      const resourceResult = await executeQuery(
+        "SELECT DISTINCT ResourceName FROM [publish].[DASHt_Resources] WHERE ResourceName IS NOT NULL ORDER BY ResourceName"
+      );
+      let resources = (resourceResult?.recordset || []).map((r: any) => r.ResourceName).filter(Boolean);
+
+      const productResult = await executeQuery(
+        "SELECT DISTINCT TOP 500 ProductName FROM [publish].[DASHt_Planning] WHERE ProductName IS NOT NULL ORDER BY ProductName"
+      );
+      let products = (productResult?.recordset || []).map((r: any) => r.ProductName).filter(Boolean);
+
+      const workcenterResult = await executeQuery(
+        "SELECT DISTINCT WorkcenterName FROM [publish].[DASHt_Resources] WHERE WorkcenterName IS NOT NULL ORDER BY WorkcenterName"
+      );
+      let workcenters = (workcenterResult?.recordset || []).map((r: any) => r.WorkcenterName).filter(Boolean);
+
       const session = req.embedSession;
       const filterIsPtAdmin = session ? await checkUserHasPtAdminRole(session.companyId, session.email).catch(() => false) : false;
       const filterEffectiveAdmin = session ? (session.isCompanyAdmin || filterIsPtAdmin) : false;
@@ -254,6 +269,9 @@ export async function registerRoutes(
               planningAreas: ["All Planning Areas"],
               scenarios: [],
               plants: ["All Plants"],
+              resources: ["All Resources"],
+              products: ["All Products"],
+              workcenters: ["All Workcenters"],
               noEntitlements: true,
             });
           }
@@ -280,6 +298,21 @@ export async function registerRoutes(
           if (entitledPlants) {
             plants = intersectFilterOptions(plants, entitledPlants, false);
           }
+
+          const entitledResources = byScope.get('Resource');
+          if (entitledResources) {
+            resources = intersectFilterOptions(resources, entitledResources, false);
+          }
+
+          const entitledProducts = byScope.get('Product');
+          if (entitledProducts) {
+            products = intersectFilterOptions(products, entitledProducts, false);
+          }
+
+          const entitledWorkcenters = byScope.get('Workcenter');
+          if (entitledWorkcenters) {
+            workcenters = intersectFilterOptions(workcenters, entitledWorkcenters, false);
+          }
         } catch (entErr: any) {
           log(`[filter-options] Entitlement lookup failed, showing all options: ${entErr.message}`, 'permissions');
         }
@@ -288,14 +321,20 @@ export async function registerRoutes(
       res.json({
         planningAreas: ["All Planning Areas", ...planningAreas],
         scenarios: scenarios,
-        plants: ["All Plants", ...plants]
+        plants: ["All Plants", ...plants],
+        resources: ["All Resources", ...resources],
+        products: ["All Products", ...products],
+        workcenters: ["All Workcenters", ...workcenters],
       });
     } catch (error: any) {
       log(`[filter-options] Error: ${error.message}`, "error");
       res.json({
         planningAreas: ["All Planning Areas"],
         scenarios: [],
-        plants: ["All Plants"]
+        plants: ["All Plants"],
+        resources: ["All Resources"],
+        products: ["All Products"],
+        workcenters: ["All Workcenters"],
       });
     }
   });
@@ -639,7 +678,10 @@ export async function registerRoutes(
     const filterPlanningArea = req.query.filterPlanningArea ? String(req.query.filterPlanningArea) : null;
     const filterScenarioId = req.query.filterScenarioId ? String(req.query.filterScenarioId) : null;
     const filterPlant = req.query.filterPlant ? String(req.query.filterPlant) : null;
-    const filters = { planningArea: filterPlanningArea, scenarioId: filterScenarioId, plant: filterPlant };
+    const filterResource = req.query.filterResource ? String(req.query.filterResource) : null;
+    const filterProduct = req.query.filterProduct ? String(req.query.filterProduct) : null;
+    const filterWorkcenter = req.query.filterWorkcenter ? String(req.query.filterWorkcenter) : null;
+    const filters = { planningArea: filterPlanningArea, scenarioId: filterScenarioId, plant: filterPlant, resource: filterResource, product: filterProduct, workcenter: filterWorkcenter };
 
     // Validate question parameter
     if (!question || typeof question !== 'string' || question.trim().length === 0) {
@@ -810,11 +852,7 @@ export async function registerRoutes(
       }
       
       // Apply user-selected global filters (from dropdown selectors)
-      const globalFilterResult = applyGlobalFilters(enforcedSql, {
-        planningArea: filters.planningArea,
-        scenarioId: filters.scenarioId,
-        plant: filters.plant,
-      });
+      const globalFilterResult = applyGlobalFilters(enforcedSql, filters);
       enforcedSql = globalFilterResult.modifiedSql;
       if (globalFilterResult.appliedFilters.length > 0) {
         log(`Global filters applied: ${globalFilterResult.appliedFilters.join('; ')}`, 'ask-stream');
@@ -949,7 +987,7 @@ export async function registerRoutes(
       req.body?.query ??
       req.body?.q ??
       req.body?.prompt;
-    const filters = req.body?.filters || { planningArea: null, scenarioId: null, plant: null };
+    const filters = req.body?.filters || { planningArea: null, scenarioId: null, plant: null, resource: null, product: null, workcenter: null };
 
     // Validate question parameter
     if (!question || typeof question !== 'string' || question.trim().length === 0) {
@@ -1085,11 +1123,7 @@ export async function registerRoutes(
       }
       
       // Apply user-selected global filters (from dropdown selectors)
-      const globalFilterResult = applyGlobalFilters(enforcedSql, {
-        planningArea: filters.planningArea,
-        scenarioId: filters.scenarioId,
-        plant: filters.plant,
-      });
+      const globalFilterResult = applyGlobalFilters(enforcedSql, filters);
       enforcedSql = globalFilterResult.modifiedSql;
       if (globalFilterResult.appliedFilters.length > 0) {
         log(`Global filters applied: ${globalFilterResult.appliedFilters.join('; ')}`, 'ask');
