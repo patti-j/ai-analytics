@@ -189,7 +189,6 @@ export default function QueryPage() {
   const [feedbackGiven, setFeedbackGiven] = useState<'up' | 'down' | null>(null);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   
-  // Global filter state
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({ planningAreas: ['All Planning Areas'], scenarios: [], plants: ['All Plants'], resources: ['All Resources'], products: ['All Products'], workcenters: ['All Workcenters'] });
   const [selectedPlanningArea, setSelectedPlanningArea] = useState('All Planning Areas');
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('');
@@ -271,13 +270,43 @@ export default function QueryPage() {
   
   useEffect(() => {
     if (!isAuthenticated) return;
-    fetch('/api/filter-options')
-      .then(res => res.json())
-      .then((data: FilterOptions) => {
-        setFilterOptions(data);
-      })
-      .catch(err => console.error('[filter-options] Failed to fetch:', err));
-  }, [isAuthenticated]);
+    const effectiveAdmin = isCompanyAdmin || isPtAdmin;
+
+    if (effectiveAdmin) {
+      fetch('/api/filter-options')
+        .then(res => {
+          if (!res.ok) throw new Error(`${res.status}`);
+          return res.json();
+        })
+        .then((data: FilterOptions) => {
+          setFilterOptions(data);
+        })
+        .catch(() => {});
+    } else if (entitlements) {
+      const byScope = new Map<string, string[]>();
+      for (const e of entitlements) {
+        const vals = byScope.get(e.ScopeType) || [];
+        vals.push(e.ScopeValue);
+        byScope.set(e.ScopeType, vals);
+      }
+
+      const paValues = (byScope.get('PlanningArea') || []).sort();
+      const plantValues = (byScope.get('Plant') || []).sort();
+      const scenarioValues = (byScope.get('Scenario') || []).sort();
+      const resourceValues = (byScope.get('Resource') || []).sort();
+      const productValues = (byScope.get('Product') || []).sort();
+      const workcenterValues = (byScope.get('Workcenter') || []).sort();
+
+      setFilterOptions({
+        planningAreas: ['All Planning Areas', ...paValues],
+        scenarios: scenarioValues.map(s => ({ id: s, name: s, type: '' })),
+        plants: ['All Plants', ...plantValues],
+        resources: ['All Resources', ...resourceValues],
+        products: ['All Products', ...productValues],
+        workcenters: ['All Workcenters', ...workcenterValues],
+      });
+    }
+  }, [isAuthenticated, entitlements, isCompanyAdmin, isPtAdmin]);
 
   const handleThumbsDown = () => {
     setShowFeedbackComment(true);
@@ -896,7 +925,9 @@ export default function QueryPage() {
                         </SelectItem>
                         {(filterOptions.scenarios || []).map((scenario) => (
                           <SelectItem key={scenario.id} value={scenario.id} data-testid={`option-scenario-${scenario.id}`}>
-                            {scenario.id} - {scenario.name} ({scenario.type})
+                            {scenario.name && scenario.type
+                              ? `${scenario.id} - ${scenario.name} (${scenario.type})`
+                              : scenario.id}
                           </SelectItem>
                         ))}
                       </SelectContent>
