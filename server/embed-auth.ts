@@ -171,23 +171,6 @@ export function embedSessionMiddleware(req: Request, res: Response, next: NextFu
     return;
   }
 
-  const isDevelopment = process.env.NODE_ENV !== 'production';
-  const devBypass = isDevelopment && !process.env.EMBED_TOKEN_SECRET;
-
-  if (devBypass) {
-    req.embedSession = {
-      sessionId: 'dev-session',
-      email: req.headers['x-username'] as string || 'dev@localhost',
-      companyId: parseInt(req.headers['x-company-id'] as string || '1', 10),
-      isCompanyAdmin: (req.headers['x-is-admin'] as string) !== 'false',
-      hasAIAnalyticsRole: true,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + SESSION_DURATION_MS,
-    };
-    next();
-    return;
-  }
-
   const sessionId = req.cookies?.[SESSION_COOKIE_NAME];
   if (!sessionId) {
     res.status(401).json({ error: 'No session. Please authenticate via embed token.' });

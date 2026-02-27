@@ -250,17 +250,6 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
           hasAIAnalyticsRole: data.hasAIAnalyticsRole,
           ...applySessionData(data),
         }));
-      } else if (!import.meta.env.PROD) {
-        console.info('[embed-session] No active session in dev mode — allowing standalone access');
-        setState(prev => ({
-          ...prev,
-          isAuthenticated: true,
-          isLoading: false,
-          email: 'dev@localhost',
-          companyId: 1,
-          isCompanyAdmin: true,
-          hasAIAnalyticsRole: true,
-        }));
       } else {
         setState(prev => ({
           ...prev,
@@ -270,25 +259,12 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
         }));
       }
     } catch {
-      if (!import.meta.env.PROD) {
-        console.info('[embed-session] Server unreachable in dev mode — allowing standalone access');
-        setState(prev => ({
-          ...prev,
-          isAuthenticated: true,
-          isLoading: false,
-          email: 'dev@localhost',
-          companyId: 1,
-          isCompanyAdmin: true,
-          hasAIAnalyticsRole: true,
-        }));
-      } else {
-        setState(prev => ({
-          ...prev,
-          isLoading: false,
-          isAuthenticated: false,
-          error: 'Unable to reach the server.',
-        }));
-      }
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        isAuthenticated: false,
+        error: 'Unable to reach the server.',
+      }));
     }
   }
 

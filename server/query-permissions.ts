@@ -1,25 +1,5 @@
-import { UserPermissions, TableAccess, AiUserEntitlement, ScopeType } from '@shared/schema';
-import { getUserPermissionsByUsername, getUserPermissions } from './permissions-storage';
+import { AiUserEntitlement, ScopeType } from '@shared/schema';
 import { log } from './index';
-
-export interface PermissionContext {
-  userId?: string;
-  username?: string;
-}
-
-export interface PermissionEnforcementResult {
-  allowed: boolean;
-  modifiedSql?: string;
-  blockedReason?: string;
-  appliedFilters?: string[];
-}
-
-const SALES_REVENUE_TABLES = [
-  'DASHt_SalesOrders',
-  'DASHt_SalesOrderLines',
-  'DASHt_PurchaseOrders',
-  'DASHt_PurchaseOrderLines',
-];
 
 const PLANNING_AREA_COLUMN = 'PlanningAreaName';
 const SCENARIO_COLUMN = 'NewScenarioId';
@@ -120,65 +100,6 @@ function getTableAlias(sql: string, tableName: string): string | null {
   return null;
 }
 
-function buildFilterClause(
-  permissions: UserPermissions,
-  tables: string[],
-  sql: string
-): { clause: string; appliedFilters: string[] } {
-  const conditions: string[] = [];
-  const appliedFilters: string[] = [];
-
-  if (permissions.allowedPlanningAreas && permissions.allowedPlanningAreas.length > 0) {
-    if (hasColumnInTables(PLANNING_AREA_COLUMN, tables)) {
-      const values = permissions.allowedPlanningAreas.map(v => `'${v.replace(/'/g, "''")}'`).join(', ');
-      const mainTable = tables.find(t => 
-        ['DASHt_Planning', 'DASHt_CapacityPlanning', 'DASHt_SalesOrders', 'DASHt_DispatchList', 'DASHt_Inventories', 'DASHt_ScheduleConformance', 'Jobs'].includes(t)
-      );
-      if (mainTable) {
-        const alias = getTableAlias(sql, mainTable);
-        const prefix = alias || `[publish].[${mainTable}]`;
-        conditions.push(`${prefix}.${PLANNING_AREA_COLUMN} IN (${values})`);
-        appliedFilters.push(`PlanningArea: ${permissions.allowedPlanningAreas.join(', ')}`);
-      }
-    }
-  }
-
-  if (permissions.allowedScenarios && permissions.allowedScenarios.length > 0) {
-    if (hasColumnInTables(SCENARIO_COLUMN, tables)) {
-      const values = permissions.allowedScenarios.map(v => `'${v.replace(/'/g, "''")}'`).join(', ');
-      const mainTable = tables.find(t => 
-        ['DASHt_Planning', 'DASHt_CapacityPlanning', 'DASHt_SalesOrders', 'DASHt_SalesOrderLines', 'DASHt_DispatchList', 'DASHt_Inventories', 'Jobs'].includes(t)
-      );
-      if (mainTable) {
-        const alias = getTableAlias(sql, mainTable);
-        const prefix = alias || `[publish].[${mainTable}]`;
-        conditions.push(`${prefix}.${SCENARIO_COLUMN} IN (${values})`);
-        appliedFilters.push(`Scenario: ${permissions.allowedScenarios.join(', ')}`);
-      }
-    }
-  }
-
-  if (permissions.allowedPlants && permissions.allowedPlants.length > 0) {
-    const plantColumn = getPlantColumnForTables(tables);
-    if (plantColumn) {
-      const values = permissions.allowedPlants.map(v => `'${v.replace(/'/g, "''")}'`).join(', ');
-      const mainTable = tables.find(t => 
-        ['DASHt_Planning', 'DASHt_CapacityPlanning', 'DASHt_DispatchList', 'DASHt_ScheduleConformance', 'Jobs'].includes(t)
-      );
-      if (mainTable) {
-        const alias = getTableAlias(sql, mainTable);
-        const prefix = alias || `[publish].[${mainTable}]`;
-        conditions.push(`${prefix}.${plantColumn} IN (${values})`);
-        appliedFilters.push(`Plant: ${permissions.allowedPlants.join(', ')}`);
-      }
-    }
-  }
-
-  return {
-    clause: conditions.length > 0 ? conditions.join(' AND ') : '',
-    appliedFilters,
-  };
-}
 
 function injectWhereClause(sql: string, filterClause: string): string {
   if (!filterClause) return sql;
@@ -209,96 +130,6 @@ function injectWhereClause(sql: string, filterClause: string): string {
 
   // Insert WHERE clause before GROUP BY/ORDER BY/HAVING or at the end
   return sql.slice(0, insertBefore).trimEnd() + ` WHERE ${filterClause} ` + sql.slice(insertBefore);
-}
-
-export function checkTableAccess(
-  permissions: UserPermissions | null,
-  tables: string[]
-): { allowed: boolean; blockedTable?: string } {
-  if (!permissions) {
-    return { allowed: true };
-  }
-
-  if (permissions.isAdmin) {
-    return { allowed: true };
-  }
-
-  if (permissions.allowedTableAccess === null) {
-    return { allowed: true };
-  }
-
-  const salesRevenueTablesInQuery = tables.filter(t => 
-    SALES_REVENUE_TABLES.some(srt => srt.toLowerCase() === t.toLowerCase())
-  );
-
-  if (salesRevenueTablesInQuery.length === 0) {
-    return { allowed: true };
-  }
-
-  const hasSalesAccess = permissions.allowedTableAccess.includes('Sales');
-  const hasRevenueAccess = permissions.allowedTableAccess.includes('Revenue');
-
-  if (!hasSalesAccess && !hasRevenueAccess) {
-    return { 
-      allowed: false, 
-      blockedTable: salesRevenueTablesInQuery[0] 
-    };
-  }
-
-  return { allowed: true };
-}
-
-export function enforcePermissions(
-  sql: string,
-  context: PermissionContext
-): PermissionEnforcementResult {
-  let permissions: UserPermissions | undefined;
-
-  if (context.userId) {
-    permissions = getUserPermissions(context.userId);
-  } else if (context.username) {
-    permissions = getUserPermissionsByUsername(context.username);
-  }
-
-  if (!permissions) {
-    log(`[permissions] No permissions found for context, allowing query`, 'permissions');
-    return { allowed: true, modifiedSql: sql, appliedFilters: [] };
-  }
-
-  if (permissions.isAdmin) {
-    log(`[permissions] Admin user ${permissions.username}, skipping enforcement`, 'permissions');
-    return { allowed: true, modifiedSql: sql, appliedFilters: [] };
-  }
-
-  const tables = extractTableNames(sql);
-  log(`[permissions] Tables in query: ${tables.join(', ')}`, 'permissions');
-
-  const tableAccess = checkTableAccess(permissions, tables);
-  if (!tableAccess.allowed) {
-    log(`[permissions] User ${permissions.username} blocked from table ${tableAccess.blockedTable}`, 'permissions');
-    return {
-      allowed: false,
-      blockedReason: `You don't have access to sales/revenue data. Please contact your administrator.`,
-    };
-  }
-
-  const { clause, appliedFilters } = buildFilterClause(permissions, tables, sql);
-  
-  if (clause) {
-    const modifiedSql = injectWhereClause(sql, clause);
-    log(`[permissions] Applied filters for ${permissions.username}: ${appliedFilters.join('; ')}`, 'permissions');
-    log(`[permissions] Modified SQL: ${modifiedSql}`, 'permissions');
-    return { allowed: true, modifiedSql, appliedFilters };
-  }
-
-  return { allowed: true, modifiedSql: sql, appliedFilters: [] };
-}
-
-export function getPermissionsForRequest(req: any): PermissionContext {
-  const userId = req.headers['x-user-id'] as string | undefined || req.query?.userId as string | undefined;
-  const username = req.headers['x-username'] as string | undefined || req.query?.username as string | undefined;
-  
-  return { userId, username };
 }
 
 export interface GlobalFilters {

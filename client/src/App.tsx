@@ -7,7 +7,6 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { EmbedSessionProvider } from "@/contexts/EmbedSessionContext";
 import QueryPage from "@/pages/query";
 import Dashboard from "@/pages/dashboard";
-import AdminPermissions from "@/pages/admin-permissions";
 import AdminUsers from "@/pages/admin-users";
 import NotFound from "@/pages/not-found";
 
@@ -16,7 +15,6 @@ function Router() {
     <Switch>
       <Route path="/" component={QueryPage} />
       <Route path="/dashboard" component={Dashboard} />
-      <Route path="/admin/permissions" component={AdminPermissions} />
       <Route path="/admin/users" component={AdminUsers} />
       <Route component={NotFound} />
     </Switch>

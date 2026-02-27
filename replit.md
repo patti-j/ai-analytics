@@ -27,7 +27,7 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 - **JOIN Support:** The SQL validator supports safe `INNER`/`LEFT`/`RIGHT` `JOIN`s with validated table references.
 - **Schema Introspection:** `INFORMATION_SCHEMA.COLUMNS` is used to provide OpenAI with exact column lists, preventing hallucination.
 - **Query Performance Monitoring:** An analytics dashboard (`/dashboard`) provides metrics on query performance, success rates, latency, and error analytics.
-- **User Permissions Enforcement:** Server-side enforcement injects WHERE clauses based on user permissions (`Planning Areas`, `Scenarios`, `Plants`) and restricts access to sensitive tables like `DASHt_SalesOrders` for non-admin users.
+- **Entitlement-Based Access Enforcement:** Server-side enforcement via `enforceEntitlements()` injects WHERE clauses based on DB-backed user entitlements (6 scope types). Non-admin users with 0 entitlements are blocked.
 - **Pinned Dashboard:** Users can pin favorite queries to a personal dashboard for quick access, storing up to 20 items locally with cached results.
 - **Server-Persisted Favorites:** Favorite questions are persisted to `dbo.AiUserFavorite` (CompanyId, UserEmail, QuestionText, CreatedAt) via `/api/my-favorites` GET/POST/DELETE routes. Favorites are loaded at session init time in `EmbedSessionContext` (same pattern as entitlements) and managed via context methods (`addFavorite`, `removeFavorite`, `toggleFavorite`, `isFavorite`).
 - **Global Filters:** Three dropdown filters (Planning Area, Scenario, Plant) are available in the UI, applied to all queries.
@@ -42,7 +42,7 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 - Parent sends `PT.EMBED.AUTH` postMessage with JWT embed token
 - App validates JWT (iss=PlanetTogether.WebApp, aud=PlanetTogether.EmbedApp) using `EMBED_TOKEN_SECRET`
 - Creates 8-hour HttpOnly cookie session (`pt_embed_session`) in memory
-- Dev bypass mode: when `EMBED_TOKEN_SECRET` is not set in development, sessions auto-create with `x-username`/`x-company-id`/`x-is-admin` headers
+- No dev bypass — JWT embed token required for all environments
 
 **Multi-Tenant Database Access:**
 - `server/db-webapp.ts`: Connection to webapp database via `WEBAPP_DB_CONNECTION_STRING` (ADO.NET format)
@@ -76,17 +76,12 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 - `client/src/contexts/EmbedSessionContext.tsx`: PostMessage listener, session management, entitlements loading, theme override
 - `client/src/components/theme-provider.tsx`: Theme management with external override support via CustomEvent
 - `client/src/pages/admin-users.tsx`: Admin page for managing user entitlements (/admin/users)
-- `client/src/pages/admin-permissions.tsx`: Legacy admin page for JSON-file permissions (/admin/permissions)
 
 **Environment Variables Required:**
-- `EMBED_TOKEN_SECRET`: Secret for JWT validation (required in production, optional for dev bypass)
+- `EMBED_TOKEN_SECRET`: Secret for JWT validation (required)
 - `WEBAPP_DB_CONNECTION_STRING`: ADO.NET connection string for webapp database (AiAnalyticsUser, AiUserEntitlement, AiUserFavorite tables)
 - `PUBLISH_DB_PASSWORD`: Password for per-company Publish DB connections
 - `DATABASE_URL`: Existing Azure SQL Publish DB connection (for single-tenant fallback)
-
-## Legacy Admin Permissions
-
-- **User Permissions Admin Page:** Legacy admin page (`/admin/permissions`) manages user access via `data/user-permissions.json`. Being replaced by DB-backed entitlements at `/admin/users`.
 
 ## Maintenance Scripts
 

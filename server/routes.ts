@@ -27,16 +27,8 @@ import {
   getDiscoveryStatus, 
   runTableDiscovery 
 } from "./table-discovery";
-import {
-  initPermissions,
-  getAllUserPermissions,
-  getUserPermissions,
-  getUserPermissionsByUsername,
-  createOrUpdateUserPermissions,
-  deleteUserPermissions,
-} from "./permissions-storage";
-import { userPermissionsSchema, tableAccessOptions, entitlementSaveSchema, SCOPE_TYPES } from "@shared/schema";
-import { enforcePermissions, getPermissionsForRequest, applyGlobalFilters, enforceEntitlements, intersectFilterOptions } from "./query-permissions";
+import { entitlementSaveSchema, SCOPE_TYPES } from "@shared/schema";
+import { applyGlobalFilters, enforceEntitlements, intersectFilterOptions } from "./query-permissions";
 import { handleSessionFromEmbed, requireAdmin } from "./embed-auth";
 import {
   getUsersWithEntitlementStatus,
@@ -824,39 +816,23 @@ export async function registerRoutes(
       // Check for disconnect before continuing
       if (clientDisconnected) return;
 
-      // Apply user permission enforcement (filter by planning area, scenario, plant)
-      const permContext = getPermissionsForRequest(req);
-      const permResult = enforcePermissions(finalSql, permContext);
-      
-      if (!permResult.allowed) {
-        log(`Permission denied: ${permResult.blockedReason}`, 'ask-stream');
-        sendEvent('error', { error: permResult.blockedReason || 'Access denied', isPermissionDenied: true });
-        return;
-      }
-      
-      let enforcedSql = permResult.modifiedSql || finalSql;
-      if (permResult.appliedFilters && permResult.appliedFilters.length > 0) {
-        log(`Permission filters applied: ${permResult.appliedFilters.join('; ')}`, 'ask-stream');
-      }
-
-      if (req.embedSession) {
-        try {
-          const entitlements = await getEntitlementsForUser(req.embedSession.companyId, req.embedSession.email);
-          const entResult = enforceEntitlements(enforcedSql, entitlements, req.embedSession.isCompanyAdmin);
-          if (!entResult.allowed) {
-            log(`Entitlement denied: ${entResult.blockedReason}`, 'ask-stream');
-            sendEvent('error', { error: entResult.blockedReason || 'Access denied', isPermissionDenied: true });
-            return;
-          }
-          enforcedSql = entResult.modifiedSql || enforcedSql;
-          if (entResult.appliedFilters && entResult.appliedFilters.length > 0) {
-            log(`Entitlement filters applied: ${entResult.appliedFilters.join('; ')}`, 'ask-stream');
-          }
-        } catch (entErr: any) {
-          log(`[ask-stream] Entitlement lookup failed — blocking query (fail-closed): ${entErr.message}`, 'ask-stream');
-          sendEvent('error', { error: 'Unable to verify your data access permissions. Please try again later.', isPermissionDenied: true });
+      let enforcedSql = finalSql;
+      try {
+        const entitlements = await getEntitlementsForUser(req.embedSession!.companyId, req.embedSession!.email);
+        const entResult = enforceEntitlements(enforcedSql, entitlements, req.embedSession!.isCompanyAdmin);
+        if (!entResult.allowed) {
+          log(`Entitlement denied: ${entResult.blockedReason}`, 'ask-stream');
+          sendEvent('error', { error: entResult.blockedReason || 'Access denied', isPermissionDenied: true });
           return;
         }
+        enforcedSql = entResult.modifiedSql || enforcedSql;
+        if (entResult.appliedFilters && entResult.appliedFilters.length > 0) {
+          log(`Entitlement filters applied: ${entResult.appliedFilters.join('; ')}`, 'ask-stream');
+        }
+      } catch (entErr: any) {
+        log(`[ask-stream] Entitlement lookup failed — blocking query (fail-closed): ${entErr.message}`, 'ask-stream');
+        sendEvent('error', { error: 'Unable to verify your data access permissions. Please try again later.', isPermissionDenied: true });
+        return;
       }
       
       // Apply user-selected global filters (from dropdown selectors)
@@ -1130,45 +1106,27 @@ export async function registerRoutes(
         }
       }
       
-      // Apply user permission enforcement (filter by planning area, scenario, plant)
-      const permContext = getPermissionsForRequest(req);
-      const permResult = enforcePermissions(finalSql, permContext);
-      
-      if (!permResult.allowed) {
-        log(`Permission denied: ${permResult.blockedReason}`, 'ask');
-        return res.status(403).json({
-          error: permResult.blockedReason || 'Access denied',
-          isPermissionDenied: true,
-        });
-      }
-      
-      let enforcedSql = permResult.modifiedSql || finalSql;
-      if (permResult.appliedFilters && permResult.appliedFilters.length > 0) {
-        log(`Permission filters applied: ${permResult.appliedFilters.join('; ')}`, 'ask');
-      }
-
-      if (req.embedSession) {
-        try {
-          const entitlements = await getEntitlementsForUser(req.embedSession.companyId, req.embedSession.email);
-          const entResult = enforceEntitlements(enforcedSql, entitlements, req.embedSession.isCompanyAdmin);
-          if (!entResult.allowed) {
-            log(`Entitlement denied: ${entResult.blockedReason}`, 'ask');
-            return res.status(403).json({
-              error: entResult.blockedReason || 'Access denied',
-              isPermissionDenied: true,
-            });
-          }
-          enforcedSql = entResult.modifiedSql || enforcedSql;
-          if (entResult.appliedFilters && entResult.appliedFilters.length > 0) {
-            log(`Entitlement filters applied: ${entResult.appliedFilters.join('; ')}`, 'ask');
-          }
-        } catch (entErr: any) {
-          log(`[ask] Entitlement lookup failed — blocking query (fail-closed): ${entErr.message}`, 'ask');
-          return res.status(503).json({
-            error: 'Unable to verify your data access permissions. Please try again later.',
+      let enforcedSql = finalSql;
+      try {
+        const entitlements = await getEntitlementsForUser(req.embedSession!.companyId, req.embedSession!.email);
+        const entResult = enforceEntitlements(enforcedSql, entitlements, req.embedSession!.isCompanyAdmin);
+        if (!entResult.allowed) {
+          log(`Entitlement denied: ${entResult.blockedReason}`, 'ask');
+          return res.status(403).json({
+            error: entResult.blockedReason || 'Access denied',
             isPermissionDenied: true,
           });
         }
+        enforcedSql = entResult.modifiedSql || enforcedSql;
+        if (entResult.appliedFilters && entResult.appliedFilters.length > 0) {
+          log(`Entitlement filters applied: ${entResult.appliedFilters.join('; ')}`, 'ask');
+        }
+      } catch (entErr: any) {
+        log(`[ask] Entitlement lookup failed — blocking query (fail-closed): ${entErr.message}`, 'ask');
+        return res.status(503).json({
+          error: 'Unable to verify your data access permissions. Please try again later.',
+          isPermissionDenied: true,
+        });
       }
       
       // Apply user-selected global filters (from dropdown selectors)
@@ -1378,120 +1336,6 @@ export async function registerRoutes(
       });
     }
   });
-
-  // ===== ADMIN PERMISSIONS ENDPOINTS =====
-  // NOTE: These endpoints need authentication/authorization when integrated with parent Blazor app.
-  // Currently unprotected for development. In production, verify user identity and isAdmin flag.
-  
-  // Initialize permissions storage
-  initPermissions();
-
-  // Get all users with permissions (admin only)
-  app.get("/api/admin/users", (_req, res) => {
-    try {
-      const users = getAllUserPermissions();
-      res.json({ users });
-    } catch (error: any) {
-      log(`[admin] Error fetching users: ${error.message}`, "error");
-      res.status(500).json({ error: "Failed to fetch users" });
-    }
-  });
-
-  // Get permissions for a specific user (admin only)
-  app.get("/api/admin/permissions/:userId", (req, res) => {
-    try {
-      const { userId } = req.params;
-      const permissions = getUserPermissions(userId);
-      if (!permissions) {
-        return res.status(404).json({ error: "User not found" });
-      }
-      res.json({ permissions });
-    } catch (error: any) {
-      log(`[admin] Error fetching user permissions: ${error.message}`, "error");
-      res.status(500).json({ error: "Failed to fetch user permissions" });
-    }
-  });
-
-  // Create or update user permissions (admin only)
-  app.put("/api/admin/permissions/:userId", (req, res) => {
-    try {
-      const { userId } = req.params;
-      const body = { ...req.body, userId };
-      
-      const parseResult = userPermissionsSchema.safeParse(body);
-      if (!parseResult.success) {
-        return res.status(400).json({ 
-          error: "Invalid permissions data", 
-          details: parseResult.error.format() 
-        });
-      }
-
-      const permissions = createOrUpdateUserPermissions(parseResult.data);
-      res.json({ permissions });
-    } catch (error: any) {
-      log(`[admin] Error updating user permissions: ${error.message}`, "error");
-      res.status(500).json({ error: "Failed to update user permissions" });
-    }
-  });
-
-  // Create a new user with permissions (admin only)
-  app.post("/api/admin/permissions", (req, res) => {
-    try {
-      const parseResult = userPermissionsSchema.safeParse(req.body);
-      if (!parseResult.success) {
-        return res.status(400).json({ 
-          error: "Invalid permissions data", 
-          details: parseResult.error.format() 
-        });
-      }
-
-      // Check if username already exists
-      const existing = getUserPermissionsByUsername(parseResult.data.username);
-      if (existing) {
-        return res.status(409).json({ error: "Username already exists" });
-      }
-
-      const permissions = createOrUpdateUserPermissions(parseResult.data);
-      res.json({ permissions });
-    } catch (error: any) {
-      log(`[admin] Error creating user: ${error.message}`, "error");
-      res.status(500).json({ error: "Failed to create user" });
-    }
-  });
-
-  // Delete user permissions (admin only)
-  app.delete("/api/admin/permissions/:userId", (req, res) => {
-    try {
-      const { userId } = req.params;
-      const deleted = deleteUserPermissions(userId);
-      if (!deleted) {
-        return res.status(404).json({ error: "User not found" });
-      }
-      res.json({ success: true });
-    } catch (error: any) {
-      log(`[admin] Error deleting user: ${error.message}`, "error");
-      res.status(500).json({ error: "Failed to delete user" });
-    }
-  });
-
-  // Get permission options (table access types)
-  app.get("/api/admin/permission-options", (_req, res) => {
-    res.json({
-      tableAccessOptions: [...tableAccessOptions]
-    });
-  });
-
-  // Run validator self-check on startup in development mode
-  if (process.env.NODE_ENV !== 'production') {
-    log('Running validator self-check...', 'startup');
-    const { passed, results } = runValidatorSelfCheck();
-    results.forEach(result => log(result, 'validator-check'));
-    if (!passed) {
-      log('⚠️  WARNING: Validator self-check failed!', 'validator-check');
-    } else {
-      log('✅ Validator self-check passed', 'validator-check');
-    }
-  }
 
   return httpServer;
 }
