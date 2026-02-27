@@ -16,7 +16,6 @@ import { detectDateTimeColumns, formatCellValue } from '@/lib/date-formatter';
 import type { QuickQuestion } from '@/config/quickQuestions';
 import { usePublishDate } from '@/hooks/usePublishDate';
 import { transformRelativeDates, hasRelativeDateLanguage } from '@/lib/date-anchor';
-import { useFavoriteQueries } from '@/hooks/useFavoriteQueries';
 import { usePinnedDashboard, PinnedQueryFilters, PinnedQueryResult } from '@/hooks/usePinnedDashboard';
 import { useSimulatedToday, getSimulatedTodaySync, fetchSimulatedToday } from '@/hooks/useSimulatedToday';
 import { useToast } from '@/hooks/use-toast';
@@ -224,7 +223,7 @@ export default function QueryPage() {
   const userScrolledRef = useRef(false);
   const lastScrollTopRef = useRef(0);
   
-  const { isCompanyAdmin, entitlements } = useEmbedSession();
+  const { isCompanyAdmin, entitlements, favorites, isFavorite, toggleFavorite, removeFavorite } = useEmbedSession();
   const tourSteps = useMemo(() => buildTourSteps(entitlements || [], isCompanyAdmin), [entitlements, isCompanyAdmin]);
   const tour = useTour(tourSteps);
   
@@ -262,9 +261,6 @@ export default function QueryPage() {
       }
     }
   }, [publishDate, simulatedToday]);
-  
-  // Favorite queries
-  const { favorites, isFavorite, toggleFavorite, removeFavorite } = useFavoriteQueries();
   
   // Pinned dashboard
   const { addPinnedItem, isPinned } = usePinnedDashboard();
@@ -851,11 +847,11 @@ export default function QueryPage() {
             </button>
             {showFavorites && (
               <div className="flex flex-wrap gap-2 pt-1">
-                {favorites.map((fav) => (
+                {favorites.map((fav, idx) => (
                   <div
-                    key={fav.id}
+                    key={fav.question}
                     className="group relative px-3 py-1.5 rounded-full border border-border/50 bg-card/50 hover:bg-primary/10 hover:border-primary/50 transition-all duration-200"
-                    data-testid={`favorite-${fav.id}`}
+                    data-testid={`favorite-${idx}`}
                   >
                     <button
                       onClick={() => {
@@ -872,11 +868,11 @@ export default function QueryPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        removeFavorite(fav.id);
+                        removeFavorite(fav.question);
                       }}
                       className="absolute -top-1 -right-1 p-0.5 rounded-full bg-background border border-border opacity-0 group-hover:opacity-100 hover:bg-destructive/20 transition-all"
                       title="Remove from favorites"
-                      data-testid={`remove-favorite-${fav.id}`}
+                      data-testid={`remove-favorite-${idx}`}
                     >
                       <XCircle className="h-3 w-3 text-destructive" />
                     </button>

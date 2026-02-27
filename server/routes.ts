@@ -193,10 +193,10 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/favorites", async (req, res) => {
+  app.get("/api/my-favorites", async (req, res) => {
     try {
       if (!req.embedSession) {
-        return res.status(401).json({ error: 'Not authenticated', favorites: [] });
+        return res.status(401).json({ error: 'Not authenticated' });
       }
       const { companyId, email } = req.embedSession;
       const rows = await getFavoritesForUser(companyId, email);
@@ -207,11 +207,11 @@ export async function registerRoutes(
       res.json({ favorites });
     } catch (error: any) {
       log(`[favorites] Error fetching favorites: ${error.message}`, 'error');
-      res.json({ favorites: [] });
+      res.status(500).json({ error: 'Failed to fetch favorites' });
     }
   });
 
-  app.post("/api/favorites", async (req, res) => {
+  app.post("/api/my-favorites", async (req, res) => {
     try {
       if (!req.embedSession) {
         return res.status(401).json({ error: 'Not authenticated' });
@@ -229,7 +229,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/favorites", async (req, res) => {
+  app.delete("/api/my-favorites", async (req, res) => {
     try {
       if (!req.embedSession) {
         return res.status(401).json({ error: 'Not authenticated' });
