@@ -133,7 +133,7 @@ export function TourOverlay({
           </button>
         </div>
         
-        <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+        <p className="text-sm text-muted-foreground mb-4 leading-relaxed whitespace-pre-line">
           {step.content}
         </p>
 

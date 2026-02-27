@@ -116,27 +116,21 @@ interface FilterOptions {
 // Tour steps for onboarding new users
 const TOUR_STEPS: TourStep[] = [
   {
-    target: '[data-tour="quick-questions"]',
-    title: 'Quick Questions',
-    content: 'Start with these common questions to get insights from your manufacturing data instantly. Just click any card to run the query.',
-    placement: 'bottom',
-  },
-  {
-    target: '[data-tour="global-filters"]',
-    title: 'Global Filters',
-    content: 'Filter your queries by Planning Area, Scenario, and Plant. These filters apply to all your questions automatically.',
-    placement: 'bottom',
-  },
-  {
     target: '[data-tour="ask-input"]',
-    title: 'Ask Your Own Questions',
-    content: 'Type any question about your manufacturing data in plain English. The AI will translate it into a database query for you.',
+    title: 'Ask Questions in Plain English',
+    content: 'Type any question about your manufacturing data and the AI will translate it into a query. Try things like:\n\n• "Show me all late jobs"\n• "What is the capacity utilization this week?"\n• "Which resources are over capacity?"\n• "Top 10 products by planned quantity"\n• "List overdue sales orders"',
     placement: 'top',
   },
   {
+    target: '[data-tour="global-filters"]',
+    title: 'Narrow Your Results',
+    content: 'Use these filters to focus on a specific Planning Area, Scenario, or Plant. They apply to every question you ask, so you can explore one area at a time.',
+    placement: 'bottom',
+  },
+  {
     target: '[data-tour="dashboard-link"]',
-    title: 'Your Dashboard',
-    content: 'Pin your favorite queries to your personal dashboard for quick access. You can view and manage them anytime.',
+    title: 'Pin Your Favorites',
+    content: 'Found a useful query? Pin it to your personal dashboard so you can re-run it anytime with one click.',
     placement: 'bottom',
   },
 ];
