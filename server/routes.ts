@@ -29,6 +29,17 @@ import { getFavoritesForUser, addFavorite as addFavoriteDb, removeFavorite as re
 import { isWebAppConfigured } from "./db-webapp";
 import { executePublishQuery } from "./db-publish";
 
+async function runPublishQuery(companyId: number | undefined, sqlText: string) {
+  if (companyId) {
+    try {
+      return await executePublishQuery(companyId, sqlText);
+    } catch (pubErr: any) {
+      log(`[db] Publish DB query failed for company ${companyId}, falling back to legacy: ${pubErr.message}`, 'db');
+    }
+  }
+  return await executeQuery(sqlText);
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -158,13 +169,7 @@ export async function registerRoutes(
       }
 
       const companyId = req.embedSession!.companyId;
-      let result;
-      try {
-        result = await executePublishQuery(companyId, query);
-      } catch (publishErr: any) {
-        log(`[admin-entitlements] Publish DB query failed for company ${companyId}, falling back to default: ${publishErr.message}`, 'admin-entitlements');
-        result = await executeQuery(query);
-      }
+      const result = await runPublishQuery(companyId, query);
       const values = (result?.recordset || []).map((r: any) => r.value).filter(Boolean);
       res.json({ scopeType, values });
     } catch (error: any) {
@@ -221,41 +226,26 @@ export async function registerRoutes(
   // Get filter options for planning area, scenario, and plant dropdowns
   app.get("/api/filter-options", async (req, res) => {
     try {
-      const planningAreaResult = await executeQuery(
-        "SELECT DISTINCT PlanningAreaName FROM [publish].[DASHt_Resources] WHERE PlanningAreaName IS NOT NULL ORDER BY PlanningAreaName"
-      );
-      let planningAreas = (planningAreaResult?.recordset || []).map((r: any) => r.PlanningAreaName).filter(Boolean);
+      const companyId = req.embedSession?.companyId;
 
-      const scenarioResult = await executeQuery(
-        `SELECT DISTINCT NewScenarioId, ScenarioName, ScenarioType 
-         FROM [publish].[DASHt_Planning] 
-         WHERE NewScenarioId IS NOT NULL 
-         ORDER BY ScenarioType, ScenarioName`
-      );
+      const [planningAreaResult, scenarioResult, plantResult, resourceResult, productResult, workcenterResult] = await Promise.all([
+        runPublishQuery(companyId, "SELECT DISTINCT PlanningAreaName FROM [publish].[DASHt_Resources] WHERE PlanningAreaName IS NOT NULL ORDER BY PlanningAreaName"),
+        runPublishQuery(companyId, "SELECT DISTINCT NewScenarioId, ScenarioName, ScenarioType FROM [publish].[DASHt_Planning] WHERE NewScenarioId IS NOT NULL ORDER BY ScenarioType, ScenarioName"),
+        runPublishQuery(companyId, "SELECT DISTINCT PlantName FROM [publish].[DASHt_Resources] WHERE PlantName IS NOT NULL ORDER BY PlantName"),
+        runPublishQuery(companyId, "SELECT DISTINCT ResourceName FROM [publish].[DASHt_Resources] WHERE ResourceName IS NOT NULL ORDER BY ResourceName"),
+        runPublishQuery(companyId, "SELECT DISTINCT TOP 500 ProductName FROM [publish].[DASHt_Planning] WHERE ProductName IS NOT NULL ORDER BY ProductName"),
+        runPublishQuery(companyId, "SELECT DISTINCT WorkcenterName FROM [publish].[DASHt_Resources] WHERE WorkcenterName IS NOT NULL ORDER BY WorkcenterName"),
+      ]);
+
+      let planningAreas = (planningAreaResult?.recordset || []).map((r: any) => r.PlanningAreaName).filter(Boolean);
       let scenarios = (scenarioResult?.recordset || []).map((r: any) => ({
         id: r.NewScenarioId,
         name: r.ScenarioName,
         type: r.ScenarioType
       })).filter((s: any) => s.id);
-
-      const plantResult = await executeQuery(
-        "SELECT DISTINCT PlantName FROM [publish].[DASHt_Resources] WHERE PlantName IS NOT NULL ORDER BY PlantName"
-      );
       let plants = (plantResult?.recordset || []).map((r: any) => r.PlantName).filter(Boolean);
-
-      const resourceResult = await executeQuery(
-        "SELECT DISTINCT ResourceName FROM [publish].[DASHt_Resources] WHERE ResourceName IS NOT NULL ORDER BY ResourceName"
-      );
       let resources = (resourceResult?.recordset || []).map((r: any) => r.ResourceName).filter(Boolean);
-
-      const productResult = await executeQuery(
-        "SELECT DISTINCT TOP 500 ProductName FROM [publish].[DASHt_Planning] WHERE ProductName IS NOT NULL ORDER BY ProductName"
-      );
       let products = (productResult?.recordset || []).map((r: any) => r.ProductName).filter(Boolean);
-
-      const workcenterResult = await executeQuery(
-        "SELECT DISTINCT WorkcenterName FROM [publish].[DASHt_Resources] WHERE WorkcenterName IS NOT NULL ORDER BY WorkcenterName"
-      );
       let workcenters = (workcenterResult?.recordset || []).map((r: any) => r.WorkcenterName).filter(Boolean);
 
       const session = req.embedSession;
@@ -532,9 +522,10 @@ export async function registerRoutes(
   });
 
   // Database connectivity check
-  app.get("/api/db-check", async (_req, res) => {
+  app.get("/api/db-check", async (req, res) => {
     try {
-      const result = await executeQuery(
+      const result = await runPublishQuery(
+        req.embedSession?.companyId,
         'SELECT TOP (1) * FROM [publish].[DASHt_Planning]'
       );
       
@@ -552,26 +543,15 @@ export async function registerRoutes(
     }
   });
 
-  // Get latest publish date from DASHt_Planning
-  app.get("/api/last-update", async (_req, res) => {
+  app.get("/api/last-update", async (req, res) => {
     try {
-      const result = await executeQuery(
-        'SELECT TOP (1) MAX(PublishDate) as lastUpdate FROM [publish].[DASHt_Planning]'
-      );
-      
+      const companyId = req.embedSession?.companyId;
+      const result = await runPublishQuery(companyId, 'SELECT TOP (1) MAX(PublishDate) as lastUpdate FROM [publish].[DASHt_Planning]');
       const lastUpdate = result.recordset[0]?.lastUpdate || null;
-      log(`PublishDate from database: ${lastUpdate}`, 'last-update');
-      
-      res.json({
-        ok: true,
-        lastUpdate,
-      });
+      res.json({ ok: true, lastUpdate });
     } catch (error: any) {
       log(`Last update fetch failed: ${error.message}`, 'last-update');
-      res.json({
-        ok: true,
-        lastUpdate: null,
-      });
+      res.json({ ok: true, lastUpdate: null });
     }
   });
 
@@ -601,7 +581,8 @@ export async function registerRoutes(
         ORDER BY t.name
       `;
 
-      const tablesResult = await executeQuery(tablesQuery);
+      const diagCompanyId = req.embedSession?.companyId;
+      const tablesResult = await runPublishQuery(diagCompanyId, tablesQuery);
       const tableNames = tablesResult.recordset.map(row => row.name);
 
       log(`Found ${tableNames.length} DASHt tables`, 'db-diagnostics');
@@ -610,9 +591,8 @@ export async function registerRoutes(
       const tableResults = await Promise.all(
         tableNames.map(async (tableName) => {
           try {
-            // Use SELECT TOP (0) to avoid reading any actual data
             const testQuery = `SELECT TOP (0) * FROM [publish].[${tableName}]`;
-            await executeQuery(testQuery);
+            await runPublishQuery(diagCompanyId, testQuery);
             
             return {
               table: tableName,
@@ -863,16 +843,15 @@ export async function registerRoutes(
       sendEvent('status', { stage: 'executing_sql', message: 'Running query...' });
 
       // Execute the query
+      const streamCompanyId = req.embedSession!.companyId;
       const sqlStartTime = Date.now();
-      const result = await executeQuery(enforcedSql);
+      const result = await runPublishQuery(streamCompanyId, enforcedSql);
       const sqlMs = Date.now() - sqlStartTime;
 
       if (clientDisconnected) return;
 
-      // Log successful execution
-      logQuery({ CompanyId: req.embedSession!.companyId, UserEmail: req.embedSession!.email, QuestionText: question, GeneratedSql: enforcedSql, RowCount: result.recordset.length, DurationMs: llmMs + sqlMs, LlmMs: llmMs, SqlMs: sqlMs, Success: true, ErrorMessage: null, ErrorStage: null });
+      logQuery({ CompanyId: streamCompanyId, UserEmail: req.embedSession!.email, QuestionText: question, GeneratedSql: enforcedSql, RowCount: result.recordset.length, DurationMs: llmMs + sqlMs, LlmMs: llmMs, SqlMs: sqlMs, Success: true, ErrorMessage: null, ErrorStage: null });
 
-      // Get actual total count if results were limited to 100
       let actualTotalCount: number | undefined;
       if (result.recordset.length === 100) {
         try {
@@ -880,7 +859,7 @@ export async function registerRoutes(
           if (fromIndex > -1) {
             let countSql = 'SELECT COUNT(*) AS TotalCount' + enforcedSql.substring(fromIndex);
             countSql = countSql.replace(/ORDER\s+BY\s+[^;]+/i, '');
-            const countResult = await executeQuery(countSql);
+            const countResult = await runPublishQuery(streamCompanyId, countSql);
             actualTotalCount = countResult.recordset[0]?.TotalCount;
           }
         } catch (countError: any) {
@@ -1132,11 +1111,12 @@ export async function registerRoutes(
       log(`Executing SQL: ${enforcedSql}`, 'ask');
 
       // Execute the query
+      const askCompanyId = req.embedSession!.companyId;
       const sqlStartTime = Date.now();
-      const result = await executeQuery(enforcedSql);
+      const result = await runPublishQuery(askCompanyId, enforcedSql);
       const sqlMs = Date.now() - sqlStartTime;
 
-      logQuery({ CompanyId: req.embedSession!.companyId, UserEmail: req.embedSession!.email, QuestionText: question, GeneratedSql: enforcedSql, RowCount: result.recordset.length, DurationMs: llmMs + sqlMs, LlmMs: llmMs, SqlMs: sqlMs, Success: true, ErrorMessage: null, ErrorStage: null });
+      logQuery({ CompanyId: askCompanyId, UserEmail: req.embedSession!.email, QuestionText: question, GeneratedSql: enforcedSql, RowCount: result.recordset.length, DurationMs: llmMs + sqlMs, LlmMs: llmMs, SqlMs: sqlMs, Success: true, ErrorMessage: null, ErrorStage: null });
 
       // Generate "did you mean?" suggestions asynchronously
       const suggestions = await generateSuggestions(question);
@@ -1152,7 +1132,7 @@ export async function registerRoutes(
             let countSql = 'SELECT COUNT(*) AS TotalCount' + enforcedSql.substring(fromIndex);
             // Remove ORDER BY clause for count query
             countSql = countSql.replace(/ORDER\s+BY\s+[^;]+/i, '');
-            const countResult = await executeQuery(countSql);
+            const countResult = await runPublishQuery(askCompanyId, countSql);
             actualTotalCount = countResult.recordset[0]?.TotalCount;
             log(`Actual total count: ${actualTotalCount} (showing first 100)`, 'ask');
           }
@@ -1185,7 +1165,7 @@ export async function registerRoutes(
             try {
               // Check if the value exists in the database
               const checkQuery = `SELECT DISTINCT TOP 10 ${pattern.column} FROM ${tableName} WHERE ${pattern.column} IS NOT NULL ORDER BY ${pattern.column}`;
-              const checkResult = await executeQuery(checkQuery);
+              const checkResult = await runPublishQuery(askCompanyId, checkQuery);
               const validValues = checkResult.recordset.map((r: any) => r[pattern.column]);
               
               if (validValues.length > 0 && !validValues.some((v: string) => v.toLowerCase() === userValue.toLowerCase())) {
@@ -1217,7 +1197,7 @@ export async function registerRoutes(
             try {
               // Get the overall date range available in the table (excluding sentinel dates)
               const rangeQuery = `SELECT MIN(${detectedDateColumn}) AS MinDate, MAX(CASE WHEN ${detectedDateColumn} < '2100-01-01' THEN ${detectedDateColumn} ELSE NULL END) AS MaxDate FROM ${tableName} WHERE ${detectedDateColumn} > '1900-01-01'`;
-              const rangeResult = await executeQuery(rangeQuery);
+              const rangeResult = await runPublishQuery(askCompanyId, rangeQuery);
               
               const minDate = rangeResult.recordset[0]?.MinDate;
               const maxDate = rangeResult.recordset[0]?.MaxDate;
