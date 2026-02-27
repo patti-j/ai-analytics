@@ -29,7 +29,7 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 - **Query Performance Monitoring:** An analytics dashboard (`/dashboard`) provides metrics on query performance, success rates, latency, and error analytics. Restricted to PT admin users only (users with `PT_*` roles in the webapp DB). Analytics data is stored in `dbo.AiQueryLog` (webapp DB) and served via `/api/admin/analytics` and `/api/admin/analytics/failed-queries` endpoints.
 - **Entitlement-Based Access Enforcement:** Server-side enforcement via `enforceEntitlements()` injects WHERE clauses based on DB-backed user entitlements (6 scope types). Non-admin users with 0 entitlements are blocked.
 - **Server-Persisted Favorites:** Favorite questions are persisted to `dbo.AiUserFavorite` (CompanyId, UserEmail, QuestionText, CreatedAt) via `/api/my-favorites` GET/POST/DELETE routes. Favorites are loaded at session init time in `EmbedSessionContext` (same pattern as entitlements) and managed via context methods (`addFavorite`, `removeFavorite`, `toggleFavorite`, `isFavorite`).
-- **Global Filters:** Three dropdown filters (Planning Area, Scenario, Plant) are available in the UI, applied to all queries.
+- **Global Filters:** Six dropdown filters (Planning Area, Scenario, Plant, Resource, Product, Workcenter) matching the 6 entitlement scope types are available in the UI, applied to all queries.
 - **SSE Streaming:** Full SSE streaming support (`/api/ask/stream`) with typing effects and a stop button is available, auto-enabled in Azure deployments.
 - **ScenarioType Filtering:** `DASHt_Planning` and `DASHt_SalesOrders` queries use the user's selected scenario from the dropdown filter.
 - **Invalid Filter Validation:** The system provides helpful messages and valid alternatives when a query returns 0 results due to non-existent filter values.
@@ -85,6 +85,19 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 - `PUBLISH_DB_PASSWORD`: Password for per-company Publish DB connections
 - `DATABASE_URL`: Existing Azure SQL Publish DB connection (for single-tenant fallback)
 
+**Navigation Icons (query.tsx header):**
+- Users icon (admin users page) — visible to company admins (`isCompanyAdmin`)
+- BarChart3 icon (analytics dashboard) — visible to PT admins (`isPtAdmin`)
+- TableProperties icon (query matrix reference) — visible to all
+- HelpCircle icon (guided tour) — visible to all
+- ThemeToggle — visible to all
+
+**Webapp DB Table Names (pt_webapp_dev):**
+- `dbo.Users` (PK: `Id`, columns: Email, CompanyId, Name, LastName, IsPTAdmin, IsPTDev, etc.)
+- `dbo.Roles` (PK: `Id`, columns: Name, CompanyId, IsGlobal, etc.)
+- `dbo.UserRole` (UsersId FK→Users.Id, RoleId FK→Roles.Id)
+- PT admin detection: `checkUserHasPtAdminRole()` joins Users→UserRole→Roles where `Name LIKE 'PT%'`
+
 ## Maintenance Scripts
 
 - **Query Matrix Generator:** The `/matrix` page (`docs/query-matrix.html`) is auto-generated from `src/config/analytics_reference.json`. To regenerate after updating table mappings:
@@ -92,6 +105,12 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
   npx tsx script/generate-matrix-html.ts
   ```
   This ensures the documentation stays in sync with the actual table selection logic.
+
+- **PT Admin Role Assignment:** Assign the PTAdmin role to a user by email:
+  ```bash
+  npx tsx script/add-pt-admin-role.ts <email>
+  ```
+  This inserts a UserRole row and sets IsPTAdmin=1 on the Users record.
 
 ## External Dependencies
 

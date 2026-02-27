@@ -11,10 +11,10 @@ interface WebAppUser {
 
 export async function getEligibleUsersFromWebApp(companyId: number): Promise<WebAppUser[]> {
   const result = await executeWebAppQuery(
-    `SELECT DISTINCT u.Email, u.FirstName, u.LastName
-     FROM dbo.[User] u
-     INNER JOIN dbo.[UserRole] ur ON u.UsersId = ur.UsersId
-     INNER JOIN dbo.[Role] r ON ur.RoleId = r.RoleId
+    `SELECT DISTINCT u.Email, u.Name AS FirstName, u.LastName
+     FROM dbo.Users u
+     INNER JOIN dbo.UserRole ur ON u.Id = ur.UsersId
+     INNER JOIN dbo.Roles r ON ur.RoleId = r.Id
      WHERE u.CompanyId = @companyId
        AND r.Name = 'AI_Analytics'
        AND u.Email IS NOT NULL

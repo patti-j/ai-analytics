@@ -244,12 +244,12 @@ export async function checkUserHasPtAdminRole(companyId: number, email: string):
   try {
     const result = await executeWebAppQuery(
       `SELECT TOP 1 1 AS hasRole
-       FROM dbo.[User] u
-       INNER JOIN dbo.[UserRole] ur ON u.UsersId = ur.UsersId
-       INNER JOIN dbo.[Role] r ON ur.RoleId = r.RoleId
+       FROM dbo.Users u
+       INNER JOIN dbo.UserRole ur ON u.Id = ur.UsersId
+       INNER JOIN dbo.Roles r ON ur.RoleId = r.Id
        WHERE u.CompanyId = @companyId
          AND u.Email = @email
-         AND r.Name LIKE 'PT[_]%'`,
+         AND r.Name LIKE 'PT%'`,
       {
         companyId: { type: sql.Int, value: companyId },
         email: { type: sql.NVarChar(256), value: email },
