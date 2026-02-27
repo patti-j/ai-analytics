@@ -227,7 +227,7 @@ export default function QueryPage() {
   const userScrolledRef = useRef(false);
   const lastScrollTopRef = useRef(0);
   
-  const { isCompanyAdmin, isPtAdmin, entitlements, favorites, isFavorite, toggleFavorite, removeFavorite } = useEmbedSession();
+  const { isAuthenticated, isCompanyAdmin, isPtAdmin, entitlements, favorites, isFavorite, toggleFavorite, removeFavorite } = useEmbedSession();
   const tourSteps = useMemo(() => buildTourSteps(entitlements || [], isCompanyAdmin, isPtAdmin), [entitlements, isCompanyAdmin, isPtAdmin]);
   const tour = useTour(tourSteps);
   
@@ -269,15 +269,15 @@ export default function QueryPage() {
   
   const { toast } = useToast();
   
-  // Fetch filter options on mount
   useEffect(() => {
+    if (!isAuthenticated) return;
     fetch('/api/filter-options')
       .then(res => res.json())
       .then((data: FilterOptions) => {
         setFilterOptions(data);
-              })
+      })
       .catch(err => console.error('[filter-options] Failed to fetch:', err));
-  }, []);
+  }, [isAuthenticated]);
 
   const handleThumbsDown = () => {
     setShowFeedbackComment(true);
@@ -313,7 +313,7 @@ export default function QueryPage() {
   };
 
   useEffect(() => {
-    // Fetch quick questions
+    if (!isAuthenticated) return;
     fetch('/api/quick-questions/all')
       .then(res => res.json())
       .then(data => {
@@ -322,7 +322,7 @@ export default function QueryPage() {
         }
       })
       .catch(err => console.error('Failed to load quick questions:', err));
-  }, []);
+  }, [isAuthenticated]);
 
 
   const executeQuery = async (q: string) => {

@@ -165,6 +165,8 @@ declare global {
 const UNPROTECTED_ROUTES = [
   '/api/session/from-embed',
   '/api/health',
+  '/api/config',
+  '/api/last-update',
 ];
 
 export function embedSessionMiddleware(req: Request, res: Response, next: NextFunction): void {
