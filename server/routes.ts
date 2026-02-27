@@ -4,20 +4,7 @@ import { executeQuery } from "./db-azure";
 import { validateAndModifySql, runValidatorSelfCheck, type ValidationOptions } from "./sql-validator";
 import { generateSqlFromQuestion, generateSuggestions, classifyQuestion, answerGeneralQuestion, generateNaturalLanguageResponse, streamNaturalLanguageResponse, cacheSuccessfulSql } from "./openai-client";
 import { log } from "./index";
-import {
-  createQueryLogContext,
-  logSuccess,
-  getNegativeFeedback,
-  logValidationFailure,
-  logExecutionFailure,
-  logGenerationFailure,
-  trackQueryForFAQ,
-  getPopularQuestions,
-  storeFeedback,
-  getFeedbackStats,
-  getAnalytics,
-  getFailedQueries,
-} from "./query-logger";
+import { logQuery, getQueryAnalytics, getPopularQuestions as getPopularQuestionsDb, getFailedQueries as getFailedQueriesDb, checkUserHasPtAdminRole } from "./query-log-storage";
 import { getValidatedQuickQuestions } from "./quick-questions";
 import { getSchemasForMode, formatSchemaForPrompt, TableSchema } from "./schema-introspection";
 import { validateSqlColumns } from "./sql-column-validator";
@@ -61,11 +48,12 @@ export async function registerRoutes(
     }
     const { companyId, email, isCompanyAdmin, hasAIAnalyticsRole } = req.embedSession;
 
-    const [entitlements, favRows] = await Promise.all([
+    const [entitlements, favRows, isPtAdmin] = await Promise.all([
       isCompanyAdmin
         ? Promise.resolve([])
         : getEntitlementsForUser(companyId, email).catch(() => []),
       getFavoritesForUser(companyId, email).catch(() => []),
+      checkUserHasPtAdminRole(companyId, email).catch(() => false),
     ]);
 
     const favorites = favRows.map(r => ({
@@ -77,6 +65,7 @@ export async function registerRoutes(
       email,
       companyId,
       isCompanyAdmin,
+      isPtAdmin,
       hasAIAnalyticsRole,
       isAdmin: isCompanyAdmin,
       entitlements,
@@ -317,57 +306,38 @@ export async function registerRoutes(
     });
   });
 
-  // Get popular questions for FAQ
-  app.get("/api/popular-questions", (_req, res) => {
-    const questions = getPopularQuestions(10);
-    res.json({ questions });
-  });
+  // ===== ADMIN ANALYTICS ENDPOINTS (PT admin role required) =====
 
-  // Submit feedback for a query result
-  app.post("/api/feedback", (req, res) => {
-    const { question, sql, feedback, comment } = req.body;
-
-    if (!question || typeof question !== 'string') {
-      return res.status(400).json({ error: 'Question is required' });
+  app.get("/api/admin/analytics", async (req, res) => {
+    try {
+      const session = req.embedSession!;
+      const isPtAdmin = await checkUserHasPtAdminRole(session.companyId, session.email);
+      if (!isPtAdmin) {
+        return res.status(403).json({ error: 'PT Admin access required' });
+      }
+      const timeRange = req.query.timeRange ? parseInt(req.query.timeRange as string, 10) : 1440;
+      const analytics = await getQueryAnalytics(timeRange);
+      res.json(analytics);
+    } catch (error: any) {
+      log(`[admin-analytics] Error: ${error.message}`, 'error');
+      res.status(500).json({ error: 'Failed to fetch analytics' });
     }
-    if (!sql || typeof sql !== 'string') {
-      return res.status(400).json({ error: 'SQL is required' });
+  });
+
+  app.get("/api/admin/analytics/failed-queries", async (req, res) => {
+    try {
+      const session = req.embedSession!;
+      const isPtAdmin = await checkUserHasPtAdminRole(session.companyId, session.email);
+      if (!isPtAdmin) {
+        return res.status(403).json({ error: 'PT Admin access required' });
+      }
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+      const failedQueries = await getFailedQueriesDb(limit);
+      res.json(failedQueries);
+    } catch (error: any) {
+      log(`[admin-analytics] Error: ${error.message}`, 'error');
+      res.status(500).json({ error: 'Failed to fetch failed queries' });
     }
-    if (!feedback || (feedback !== 'up' && feedback !== 'down')) {
-      return res.status(400).json({ error: 'Feedback must be "up" or "down"' });
-    }
-
-    storeFeedback(question, sql, feedback, comment);
-    log(`Feedback received: ${feedback} for question: ${question.substring(0, 50)}...`, 'feedback');
-
-    res.json({ success: true });
-  });
-
-  // Get feedback statistics
-  app.get("/api/feedback/stats", (_req, res) => {
-    const stats = getFeedbackStats();
-    res.json(stats);
-  });
-
-  // Get negative feedback (thumbs down) for analysis
-  app.get("/api/feedback/negative", (req, res) => {
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
-    const negativeFeedback = getNegativeFeedback(limit);
-    res.json({ feedback: negativeFeedback, count: negativeFeedback.length });
-  });
-
-  // Get analytics data for dashboard
-  app.get("/api/analytics", (req, res) => {
-    const timeRange = req.query.timeRange ? parseInt(req.query.timeRange as string, 10) : 1440; // 24 hours
-    const analytics = getAnalytics(timeRange);
-    res.json(analytics);
-  });
-
-  // Get failed queries for analysis (includes full SQL and error details)
-  app.get("/api/analytics/failed-queries", (req, res) => {
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
-    const failedQueries = getFailedQueries(limit);
-    res.json(failedQueries);
   });
 
   // Serve query matrix HTML for team review
@@ -443,10 +413,10 @@ export async function registerRoutes(
       const reportId = req.params.reportId;
       const maxQuestions = 5;
       
-      // Get popular questions (queries run multiple times with results)
-      const popularQueries = getPopularQuestions(maxQuestions);
+      // Get popular questions from DB
+      const popularFromDb = await getPopularQuestionsDb(maxQuestions);
       const variedIcons = ['📊', '📈', '🔍', '💡', '⚡', '🎯', '📋', '✨'];
-      const popularAsQuestions = popularQueries.map((q, idx) => ({
+      const popularAsQuestions = popularFromDb.map((q: any, idx: number) => ({
         text: q.question,
         icon: idx === 0 ? '🔥' : variedIcons[(idx - 1) % variedIcons.length],
         isPopular: true,
@@ -457,7 +427,7 @@ export async function registerRoutes(
       const staticQuestions = getValidatedQuickQuestions(reportId);
       
       // Merge: popular first, then fill with static (avoiding duplicates)
-      const popularTexts = new Set(popularQueries.map(q => q.question.toLowerCase()));
+      const popularTexts = new Set(popularFromDb.map((q: any) => q.question.toLowerCase()));
       const filteredStatic = staticQuestions.filter(
         q => !popularTexts.has(q.text.toLowerCase())
       );
@@ -731,14 +701,12 @@ export async function registerRoutes(
     sendEvent('status', { stage: 'connected', message: 'Connected' });
     sendEvent('status', { stage: 'after_connected', message: 'after_connected' });
 
-    let logContext: ReturnType<typeof createQueryLogContext> | undefined;
     let generatedSql: string | undefined;
     let llmStartTime: number | undefined;
     let llmMs: number | undefined;
 
     try {
       log(`Processing question (streaming): ${question}`, 'ask-stream');
-      logContext = createQueryLogContext(req, question);
 
       // Classify INSIDE try so errors don't kill SSE immediately
       const questionType = await classifyQuestion(question);
@@ -790,7 +758,7 @@ export async function registerRoutes(
       
       if (!validation.valid) {
         log(`SQL validation failed (streaming): ${validation.error}`, 'ask-stream');
-        logValidationFailure(logContext, generatedSql, validation.error || 'Unknown validation error', llmMs);
+        logQuery({ CompanyId: req.embedSession!.companyId, UserEmail: req.embedSession!.email, QuestionText: question, GeneratedSql: generatedSql, RowCount: null, DurationMs: llmMs, LlmMs: llmMs, SqlMs: null, Success: false, ErrorMessage: validation.error || 'Unknown validation error', ErrorStage: 'validation' });
         sendEvent('error', { error: `SQL validation failed: ${validation.error}`, sql: generatedSql });
         return;
       }
@@ -801,7 +769,7 @@ export async function registerRoutes(
       const columnValidation = await validateSqlColumns(finalSql, selectedTables);
       if (!columnValidation.valid) {
         log(`Column validation failed (streaming): ${columnValidation.errors.length} errors - ${JSON.stringify(columnValidation.errors)}`, 'ask-stream');
-        logValidationFailure(logContext, finalSql, `Column validation failed`, llmMs);
+        logQuery({ CompanyId: req.embedSession!.companyId, UserEmail: req.embedSession!.email, QuestionText: question, GeneratedSql: finalSql, RowCount: null, DurationMs: llmMs, LlmMs: llmMs, SqlMs: null, Success: false, ErrorMessage: 'Column validation failed', ErrorStage: 'validation' });
         
         const firstError = columnValidation.errors[0];
         let errorMessage = firstError.message;
@@ -858,8 +826,7 @@ export async function registerRoutes(
       if (clientDisconnected) return;
 
       // Log successful execution
-      logSuccess(logContext, enforcedSql, result.recordset.length, llmMs, sqlMs);
-      trackQueryForFAQ(question, result.recordset.length);
+      logQuery({ CompanyId: req.embedSession!.companyId, UserEmail: req.embedSession!.email, QuestionText: question, GeneratedSql: enforcedSql, RowCount: result.recordset.length, DurationMs: llmMs + sqlMs, LlmMs: llmMs, SqlMs: sqlMs, Success: true, ErrorMessage: null, ErrorStage: null });
 
       // Get actual total count if results were limited to 100
       let actualTotalCount: number | undefined;
@@ -956,15 +923,9 @@ export async function registerRoutes(
       log(`Error in /api/ask/stream: ${error.message}`, 'ask-stream');
 
       // Only log to query logger if context was created
-      if (logContext) {
-        if (generatedSql) {
-          const validationOptions: ValidationOptions = {};
-          const validation = validateAndModifySql(generatedSql, validationOptions);
-          const failedSql = validation.modifiedSql || generatedSql;
-          logExecutionFailure(logContext, failedSql, error.message || 'Failed to execute query', llmMs);
-        } else {
-          logGenerationFailure(logContext, error.message || 'Failed to generate SQL');
-        }
+      if (req.embedSession) {
+        const errorStage = generatedSql ? 'execution' : 'generation';
+        logQuery({ CompanyId: req.embedSession.companyId, UserEmail: req.embedSession.email, QuestionText: question, GeneratedSql: generatedSql || null, RowCount: null, DurationMs: llmMs || 0, LlmMs: llmMs, SqlMs: null, Success: false, ErrorMessage: error.message || 'Failed to process query', ErrorStage: errorStage });
       }
 
       sendEvent('error', { error: error.message || 'Failed to process query' });
@@ -1004,8 +965,6 @@ export async function registerRoutes(
       });
     }
 
-    // Create query log context
-    const logContext = createQueryLogContext(req, question);
     log(`Processing question: ${question}`, 'ask');
 
     let generatedSql: string | undefined;
@@ -1045,13 +1004,7 @@ export async function registerRoutes(
       if (!validation.valid) {
         log(`SQL validation failed: ${validation.error}`, 'ask');
         
-        // Log validation failure
-        logValidationFailure(
-          logContext,
-          generatedSql,
-          validation.error || 'Unknown validation error',
-          llmMs
-        );
+        logQuery({ CompanyId: req.embedSession!.companyId, UserEmail: req.embedSession!.email, QuestionText: question, GeneratedSql: generatedSql, RowCount: null, DurationMs: llmMs, LlmMs: llmMs, SqlMs: null, Success: false, ErrorMessage: validation.error || 'Unknown validation error', ErrorStage: 'validation' });
 
         return res.status(400).json({
           error: `SQL validation failed: ${validation.error}`,
@@ -1071,13 +1024,7 @@ export async function registerRoutes(
           log(`  - ${error.message}`, 'ask');
         }
         
-        // Log validation failure
-        logValidationFailure(
-          logContext,
-          finalSql,
-          `Column validation failed: ${columnValidation.errors.map(e => e.message).join('; ')}`,
-          llmMs
-        );
+        logQuery({ CompanyId: req.embedSession!.companyId, UserEmail: req.embedSession!.email, QuestionText: question, GeneratedSql: finalSql, RowCount: null, DurationMs: llmMs, LlmMs: llmMs, SqlMs: null, Success: false, ErrorMessage: `Column validation failed: ${columnValidation.errors.map(e => e.message).join('; ')}`, ErrorStage: 'validation' });
         
         // Detect scope-mismatch using semantic catalog keywords
         const questionLower = question.toLowerCase();
@@ -1147,17 +1094,7 @@ export async function registerRoutes(
       const result = await executeQuery(enforcedSql);
       const sqlMs = Date.now() - sqlStartTime;
 
-      // Log successful execution (use enforcedSql which is the validated/permission-filtered SQL)
-      logSuccess(
-        logContext,
-        enforcedSql,
-        result.recordset.length,
-        llmMs,
-        sqlMs
-      );
-
-      // Track for FAQ popularity (only queries with results)
-      trackQueryForFAQ(question, result.recordset.length);
+      logQuery({ CompanyId: req.embedSession!.companyId, UserEmail: req.embedSession!.email, QuestionText: question, GeneratedSql: enforcedSql, RowCount: result.recordset.length, DurationMs: llmMs + sqlMs, LlmMs: llmMs, SqlMs: sqlMs, Success: true, ErrorMessage: null, ErrorStage: null });
 
       // Generate "did you mean?" suggestions asynchronously
       const suggestions = await generateSuggestions(question);
@@ -1316,18 +1253,9 @@ export async function registerRoutes(
           });
         }
         
-        logExecutionFailure(
-          logContext,
-          failedSql,
-          error.message || 'Failed to execute query',
-          llmMs
-        );
+        logQuery({ CompanyId: req.embedSession!.companyId, UserEmail: req.embedSession!.email, QuestionText: question, GeneratedSql: failedSql, RowCount: null, DurationMs: llmMs || 0, LlmMs: llmMs, SqlMs: null, Success: false, ErrorMessage: error.message || 'Failed to execute query', ErrorStage: 'execution' });
       } else {
-        // Error during SQL generation
-        logGenerationFailure(
-          logContext,
-          error.message || 'Failed to generate SQL'
-        );
+        logQuery({ CompanyId: req.embedSession!.companyId, UserEmail: req.embedSession!.email, QuestionText: question, GeneratedSql: null, RowCount: null, DurationMs: 0, LlmMs: null, SqlMs: null, Success: false, ErrorMessage: error.message || 'Failed to generate SQL', ErrorStage: 'generation' });
       }
 
       res.status(500).json({

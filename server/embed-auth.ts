@@ -5,6 +5,7 @@ import { EmbedTokenPayload, EmbedSession, SCOPE_TYPES } from '@shared/schema';
 import { log } from './index';
 import { getEntitlementsForUser } from './entitlement-storage';
 import { getFavoritesForUser } from './favorites-storage';
+import { checkUserHasPtAdminRole } from './query-log-storage';
 
 const SESSION_COOKIE_NAME = 'pt_embed_session';
 const SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
@@ -110,7 +111,7 @@ export async function handleSessionFromEmbed(req: Request, res: Response): Promi
       path: '/',
     });
 
-    const [entitlements, favRows] = await Promise.all([
+    const [entitlements, favRows, isPtAdmin] = await Promise.all([
       session.isCompanyAdmin
         ? Promise.resolve([])
         : getEntitlementsForUser(session.companyId, session.email).catch(err => {
@@ -121,6 +122,7 @@ export async function handleSessionFromEmbed(req: Request, res: Response): Promi
         log(`[embed-auth] Failed to load favorites: ${err.message}`, 'embed-auth');
         return [];
       }),
+      checkUserHasPtAdminRole(session.companyId, session.email).catch(() => false),
     ]);
 
     const favorites = favRows.map(r => ({
@@ -137,6 +139,7 @@ export async function handleSessionFromEmbed(req: Request, res: Response): Promi
         expiresAt: session.expiresAt,
       },
       isAdmin: session.isCompanyAdmin,
+      isPtAdmin,
       entitlements,
       scopeTypes: SCOPE_TYPES,
       favorites,

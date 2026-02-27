@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -16,20 +16,6 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
-
-export const popularQueries = pgTable("popular_queries", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  question: text("question").notNull().unique(),
-  count: integer("count").notNull().default(1),
-  lastUsed: timestamp("last_used").notNull().default(sql`now()`),
-});
-
-export const insertPopularQuerySchema = createInsertSchema(popularQueries).omit({
-  id: true,
-});
-
-export type InsertPopularQuery = z.infer<typeof insertPopularQuerySchema>;
-export type PopularQuery = typeof popularQueries.$inferSelect;
 
 // User Permissions schema for admin management
 export const SCOPE_TYPES = ['PlanningArea', 'Plant', 'Scenario', 'Resource', 'Product', 'Workcenter'] as const;

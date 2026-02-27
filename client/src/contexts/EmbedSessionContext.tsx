@@ -12,6 +12,7 @@ interface EmbedSessionState {
   email: string | null;
   companyId: number | null;
   isCompanyAdmin: boolean;
+  isPtAdmin: boolean;
   hasAIAnalyticsRole: boolean;
   error: string | null;
   entitlements: AiUserEntitlement[];
@@ -80,6 +81,7 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
     email: null,
     companyId: null,
     isCompanyAdmin: false,
+    isPtAdmin: false,
     hasAIAnalyticsRole: false,
     error: null,
     entitlements: [],
@@ -163,6 +165,7 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
         email: data.session.email,
         companyId: data.session.companyId,
         isCompanyAdmin: data.session.isCompanyAdmin,
+        isPtAdmin: data.isPtAdmin || false,
         hasAIAnalyticsRole: true,
         error: null,
         ...applySessionData(data),
@@ -247,6 +250,7 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
           email: data.email,
           companyId: data.companyId,
           isCompanyAdmin: data.isCompanyAdmin,
+          isPtAdmin: data.isPtAdmin || false,
           hasAIAnalyticsRole: data.hasAIAnalyticsRole,
           ...applySessionData(data),
         }));

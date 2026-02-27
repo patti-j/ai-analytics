@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, AlertCircle, Sparkles, ChevronDown, ChevronUp, Database, XCircle, Download, ThumbsUp, ThumbsDown, BarChart3, Heart, Trash2, Lightbulb, MessageSquare, ArrowUp, Pin, HelpCircle, Copy, Check, TableProperties, Users } from 'lucide-react';
+import { Loader2, AlertCircle, Sparkles, ChevronDown, ChevronUp, Database, XCircle, Download, ThumbsUp, ThumbsDown, BarChart3, Heart, Trash2, Lightbulb, MessageSquare, ArrowUp, HelpCircle, Copy, Check, TableProperties, Users } from 'lucide-react';
 import { Link } from 'wouter';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { ResultChart } from '@/components/result-chart';
@@ -16,7 +16,6 @@ import { detectDateTimeColumns, formatCellValue } from '@/lib/date-formatter';
 import type { QuickQuestion } from '@/config/quickQuestions';
 import { usePublishDate } from '@/hooks/usePublishDate';
 import { transformRelativeDates, hasRelativeDateLanguage } from '@/lib/date-anchor';
-import { usePinnedDashboard, PinnedQueryFilters, PinnedQueryResult } from '@/hooks/usePinnedDashboard';
 import { useSimulatedToday, getSimulatedTodaySync, fetchSimulatedToday } from '@/hooks/useSimulatedToday';
 import { useToast } from '@/hooks/use-toast';
 import { useTour, type TourStep } from '@/hooks/useTour';
@@ -167,8 +166,8 @@ function buildTourSteps(entitlements: AiUserEntitlement[], isAdmin: boolean): To
     },
     {
       target: '[data-tour="dashboard-link"]',
-      title: 'Favorites & Dashboard',
-      content: 'Mark any query as a favorite with the heart icon so you can find it quickly later. You can also pin results to your personal dashboard for one-click access anytime.',
+      title: 'Favorites',
+      content: 'Mark any query as a favorite with the heart icon so you can find it quickly later.',
       placement: 'bottom',
     },
   ];
@@ -222,7 +221,7 @@ export default function QueryPage() {
   const userScrolledRef = useRef(false);
   const lastScrollTopRef = useRef(0);
   
-  const { isCompanyAdmin, entitlements, favorites, isFavorite, toggleFavorite, removeFavorite } = useEmbedSession();
+  const { isCompanyAdmin, isPtAdmin, entitlements, favorites, isFavorite, toggleFavorite, removeFavorite } = useEmbedSession();
   const tourSteps = useMemo(() => buildTourSteps(entitlements || [], isCompanyAdmin), [entitlements, isCompanyAdmin]);
   const tour = useTour(tourSteps);
   
@@ -261,8 +260,6 @@ export default function QueryPage() {
     }
   }, [publishDate, simulatedToday]);
   
-  // Pinned dashboard
-  const { addPinnedItem, isPinned } = usePinnedDashboard();
   
   const { toast } = useToast();
   
@@ -711,17 +708,19 @@ export default function QueryPage() {
             </p>
           </div>
           <div className="flex items-center gap-1">
-            <Link href="/dashboard" data-tour="dashboard-link">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                data-testid="button-dashboard"
-                title="Analytics dashboard"
-              >
-                <BarChart3 className="h-4 w-4" />
-              </Button>
-            </Link>
+            {isPtAdmin && (
+              <Link href="/dashboard" data-tour="dashboard-link">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  data-testid="button-dashboard"
+                  title="Analytics dashboard"
+                >
+                  <BarChart3 className="h-4 w-4" />
+                </Button>
+              </Link>
+            )}
             <a href="/matrix" target="_blank" rel="noopener noreferrer">
               <Button
                 variant="ghost"
@@ -1236,43 +1235,6 @@ export default function QueryPage() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                       
-                      {/* Pin to Dashboard button */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                        onClick={() => {
-                          const currentFilters: PinnedQueryFilters = {
-                            planningArea: selectedPlanningArea !== 'All Planning Areas' ? selectedPlanningArea : null,
-                            scenarioId: selectedScenarioId || null,
-                            plant: selectedPlant !== 'All Plants' ? selectedPlant : null
-                          };
-                          const pinnedResult: PinnedQueryResult = {
-                            rows: result.rows,
-                            rowCount: result.rowCount,
-                            sql: result.sql,
-                            answer: result.answer
-                          };
-                          const pinResult = addPinnedItem(
-                            submittedQuestion,
-                            currentFilters,
-                            showChart ? 'chart' : 'table',
-                            undefined,
-                            pinnedResult
-                          );
-                          if (pinResult === 'success') {
-                            toast({ title: 'Pinned!', description: 'Query added to your dashboard' });
-                          } else if (pinResult === 'max_reached') {
-                            toast({ title: 'Dashboard full', description: 'You can pin up to 20 queries. Remove some to add new ones.', variant: 'destructive' });
-                          } else {
-                            toast({ title: 'Already pinned', description: 'This query is already on your dashboard', variant: 'destructive' });
-                          }
-                        }}
-                        data-testid="button-pin-to-dashboard"
-                      >
-                        <Pin className="h-4 w-4" />
-                        Pin to Dashboard
-                      </Button>
                     </>
                   )}
                   {result.sql && (

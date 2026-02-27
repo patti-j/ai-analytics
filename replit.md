@@ -26,9 +26,8 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 - **Comprehensive Schema Grounding:** Database schemas are prefetched and cached. A SQL Column Validator validates all column references in generated SQL against the cached schema.
 - **JOIN Support:** The SQL validator supports safe `INNER`/`LEFT`/`RIGHT` `JOIN`s with validated table references.
 - **Schema Introspection:** `INFORMATION_SCHEMA.COLUMNS` is used to provide OpenAI with exact column lists, preventing hallucination.
-- **Query Performance Monitoring:** An analytics dashboard (`/dashboard`) provides metrics on query performance, success rates, latency, and error analytics.
+- **Query Performance Monitoring:** An analytics dashboard (`/dashboard`) provides metrics on query performance, success rates, latency, and error analytics. Restricted to PT admin users only (users with `PT_*` roles in the webapp DB). Analytics data is stored in `dbo.AiQueryLog` (webapp DB) and served via `/api/admin/analytics` and `/api/admin/analytics/failed-queries` endpoints.
 - **Entitlement-Based Access Enforcement:** Server-side enforcement via `enforceEntitlements()` injects WHERE clauses based on DB-backed user entitlements (6 scope types). Non-admin users with 0 entitlements are blocked.
-- **Pinned Dashboard:** Users can pin favorite queries to a personal dashboard for quick access, storing up to 20 items locally with cached results.
 - **Server-Persisted Favorites:** Favorite questions are persisted to `dbo.AiUserFavorite` (CompanyId, UserEmail, QuestionText, CreatedAt) via `/api/my-favorites` GET/POST/DELETE routes. Favorites are loaded at session init time in `EmbedSessionContext` (same pattern as entitlements) and managed via context methods (`addFavorite`, `removeFavorite`, `toggleFavorite`, `isFavorite`).
 - **Global Filters:** Three dropdown filters (Planning Area, Scenario, Plant) are available in the UI, applied to all queries.
 - **SSE Streaming:** Full SSE streaming support (`/api/ask/stream`) with typing effects and a stop button is available, auto-enabled in Azure deployments.
@@ -49,13 +48,15 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 - `server/db-publish.ts`: Dynamic per-company Publish DB pools looked up from `CompanyDbs` table in webapp DB
 - `server/db-azure.ts`: Original single-tenant connection used for query execution (fallback)
 
-**3 AI Tables (all in webapp DB, all loaded at session init):**
+**4 AI Tables (all in webapp DB):**
 - `dbo.AiAnalyticsUser` — user records (CompanyId + UserEmail PK)
 - `dbo.AiUserEntitlement` — scope-based permissions (CompanyId + UserEmail + ScopeType + ScopeValue PK)
 - `dbo.AiUserFavorite` — saved questions (CompanyId + UserEmail + QuestionText PK)
+- `dbo.AiQueryLog` — query audit log (Id IDENTITY PK, CompanyId, UserEmail, QuestionText, GeneratedSql, RowCount, DurationMs, LlmMs, SqlMs, Success, ErrorMessage, ErrorStage, CreatedAt)
 - Entitlements and favorites are bundled into `/api/session/from-embed` and `/api/session` responses (no separate GET endpoints)
 - Favorites mutations via POST/DELETE `/api/my-favorites`
 - Admin CRUD at `/api/admin/entitlements/*` protected by `requireAdmin` middleware
+- Analytics endpoints at `/api/admin/analytics` and `/api/admin/analytics/failed-queries` protected by PT admin role check
 - 6 scope types: PlanningArea, Plant, Scenario, Resource, Product, Workcenter
 - **Query Enforcement:** `enforceEntitlements()` in `server/query-permissions.ts` injects WHERE clauses based on user entitlements into both `/api/ask` and `/api/ask/stream`. Non-admin users with 0 entitlements are blocked. Entitlement lookup failure is fail-closed (503). Filter-options endpoint intersects dropdown values with user entitlements (non-admin only). Column mappings cover all 6 scope types across DASHt tables.
 
@@ -66,6 +67,7 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 - `server/entitlement-storage.ts`: AiAnalyticsUser & AiUserEntitlement CRUD
 - `server/membership-sync.ts`: AI_Analytics role membership sync
 - `server/favorites-storage.ts`: AiUserFavorite CRUD (CompanyId+UserEmail+QuestionText scoped)
+- `server/query-log-storage.ts`: AiQueryLog insert + analytics aggregation (logQuery, getQueryAnalytics, getPopularQuestions, getFailedQueries, checkUserHasPtAdminRole)
 
 **Theme Override from Parent:**
 - Parent can send `ui.theme` ("dark"|"light") in the `PT.EMBED.AUTH` postMessage
