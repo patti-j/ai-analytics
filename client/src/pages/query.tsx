@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +24,7 @@ import { useDevUser } from '@/hooks/useDevUser';
 import { useTour, type TourStep } from '@/hooks/useTour';
 import { TourOverlay } from '@/components/TourOverlay';
 import { useEmbedSession } from '@/contexts/EmbedSessionContext';
+import type { AiUserEntitlement } from '@shared/schema';
 
 const APP_VERSION = '1.2.0'; // Date formatting + mode-specific schema optimization
 
@@ -113,27 +114,67 @@ interface FilterOptions {
   plants: string[];
 }
 
-// Tour steps for onboarding new users
-const TOUR_STEPS: TourStep[] = [
-  {
-    target: '[data-tour="ask-input"]',
-    title: 'Ask Questions in Plain English',
-    content: 'Type any question about your manufacturing data and the AI will translate it into a query. Try things like:\n\n• "Show me all late jobs"\n• "What is the capacity utilization this week?"\n• "Which resources are over capacity?"\n• "Top 10 products by planned quantity"\n• "List overdue sales orders"',
-    placement: 'top',
-  },
-  {
-    target: '[data-tour="global-filters"]',
-    title: 'Narrow Your Results',
-    content: 'Use these filters to focus on a specific Planning Area, Scenario, or Plant. They apply to every question you ask, so you can explore one area at a time.',
-    placement: 'bottom',
-  },
-  {
-    target: '[data-tour="dashboard-link"]',
-    title: 'Pin Your Favorites',
-    content: 'Found a useful query? Pin it to your personal dashboard so you can re-run it anytime with one click.',
-    placement: 'bottom',
-  },
-];
+function buildTourSteps(entitlements: AiUserEntitlement[], isAdmin: boolean): TourStep[] {
+  const scopeLabels: Record<string, string> = {
+    PlanningArea: 'Planning Area',
+    Plant: 'Plant',
+    Scenario: 'Scenario',
+    Resource: 'Resource',
+    Product: 'Product',
+    Workcenter: 'Workcenter',
+  };
+
+  let scopeLines = '';
+  if (isAdmin) {
+    scopeLines = 'You have admin access — all data is visible to you.';
+  } else if (entitlements.length === 0) {
+    scopeLines = 'Your permissions have not been configured yet. Contact your administrator to get access.';
+  } else {
+    const byScope = new Map<string, string[]>();
+    for (const e of entitlements) {
+      const vals = byScope.get(e.ScopeType) || [];
+      vals.push(e.ScopeValue);
+      byScope.set(e.ScopeType, vals);
+    }
+    const lines: string[] = [];
+    for (const [scope, label] of Object.entries(scopeLabels)) {
+      const vals = byScope.get(scope);
+      if (vals && vals.length > 0) {
+        lines.push(`${label}: ${vals.join(', ')}`);
+      } else {
+        lines.push(`${label}: All (no restriction)`);
+      }
+    }
+    scopeLines = lines.join('\n');
+  }
+
+  return [
+    {
+      target: '[data-tour="ask-input"]',
+      title: 'Welcome to AI Analytics',
+      content: 'Ask questions about your manufacturing data in everyday language. The AI translates what you type into a database query and shows the results instantly.',
+      placement: 'top',
+    },
+    {
+      target: '[data-tour="ask-input"]',
+      title: 'What Can You Ask?',
+      content: 'Here are some questions to get you started:\n\n• "Show me all late jobs"\n• "What is the capacity utilization this week?"\n• "Which resources are over capacity?"\n• "Top 10 products by planned quantity"\n• "List overdue sales orders"\n• "Show dispatch list for today"',
+      placement: 'top',
+    },
+    {
+      target: '[data-tour="global-filters"]',
+      title: 'Your Data Scope',
+      content: `Use these filters to focus your queries. Your current permissions:\n\n${scopeLines}`,
+      placement: 'bottom',
+    },
+    {
+      target: '[data-tour="dashboard-link"]',
+      title: 'Favorites & Dashboard',
+      content: 'Mark any query as a favorite with the heart icon so you can find it quickly later. You can also pin results to your personal dashboard for one-click access anytime.',
+      placement: 'bottom',
+    },
+  ];
+}
 
 export default function QueryPage() {
   const [question, setQuestion] = useState('');
@@ -183,9 +224,9 @@ export default function QueryPage() {
   const userScrolledRef = useRef(false);
   const lastScrollTopRef = useRef(0);
   
-  // Tour hook for new user onboarding
-  const tour = useTour(TOUR_STEPS);
-  const { isCompanyAdmin } = useEmbedSession();
+  const { isCompanyAdmin, entitlements } = useEmbedSession();
+  const tourSteps = useMemo(() => buildTourSteps(entitlements || [], isCompanyAdmin), [entitlements, isCompanyAdmin]);
+  const tour = useTour(tourSteps);
   
   // Auto-start tour for first-time users (after a short delay to ensure page is loaded)
   useEffect(() => {
