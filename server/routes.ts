@@ -889,6 +889,7 @@ export async function registerRoutes(
       if (clientDisconnected) return;
 
       let enforcedSql = finalSql;
+      let entitlementFilters: string[] = [];
       try {
         const isPtAdmin = await checkUserHasPtAdminRole(req.embedSession!.companyId, req.embedSession!.email).catch(() => false);
         const effectiveAdmin = req.embedSession!.isCompanyAdmin || isPtAdmin;
@@ -900,8 +901,9 @@ export async function registerRoutes(
           return;
         }
         enforcedSql = entResult.modifiedSql || enforcedSql;
-        if (entResult.appliedFilters && entResult.appliedFilters.length > 0) {
-          log(`Entitlement filters applied: ${entResult.appliedFilters.join('; ')}`, 'ask-stream');
+        entitlementFilters = entResult.appliedFilters || [];
+        if (entitlementFilters.length > 0) {
+          log(`Entitlement filters applied: ${entitlementFilters.join('; ')}`, 'ask-stream');
         }
       } catch (entErr: any) {
         log(`[ask-stream] Entitlement lookup failed — blocking query (fail-closed): ${entErr.message}`, 'ask-stream');
@@ -959,7 +961,7 @@ export async function registerRoutes(
 
       // Collect all applied filters for the response
       const allAppliedFilters = [
-        ...(entResult.appliedFilters || []),
+        ...entitlementFilters,
         ...(globalFilterResult.appliedFilters || [])
       ];
 
