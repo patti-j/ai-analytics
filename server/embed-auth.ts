@@ -52,38 +52,52 @@ export async function validateEmbedToken(token: string): Promise<EmbedTokenPaylo
     audience: 'PlanetTogether.EmbedApp',
   }) as Record<string, any>;
 
-  log(`[embed-auth] Token claims: ${JSON.stringify(Object.keys(decoded))}`, 'embed-auth');
-  log(`[embed-auth] Token values: email=${decoded.email}, companyId=${decoded.companyId} (${typeof decoded.companyId}), CompanyId=${decoded.CompanyId} (${typeof decoded.CompanyId}), hasAIAnalyticsRole=${decoded.hasAIAnalyticsRole}, isCompanyAdmin=${decoded.isCompanyAdmin}`, 'embed-auth');
+  const claimKeys = Object.keys(decoded);
+  log(`[embed-auth] Token claims: ${JSON.stringify(claimKeys)}`, 'embed-auth');
 
-  const email = decoded.email || decoded.Email || decoded.sub;
-  const companyId = decoded.companyId ?? decoded.CompanyId ?? decoded.company_id;
-  const hasAIAnalyticsRole = decoded.hasAIAnalyticsRole ?? decoded.HasAIAnalyticsRole ?? decoded.has_ai_analytics_role;
-  const isCompanyAdmin = decoded.isCompanyAdmin ?? decoded.IsCompanyAdmin ?? decoded.is_company_admin;
+  const findClaim = (names: string[]): any => {
+    for (const name of names) {
+      const key = claimKeys.find(k => k.toLowerCase() === name.toLowerCase());
+      if (key !== undefined && decoded[key] !== undefined) return decoded[key];
+    }
+    return undefined;
+  };
 
-  const numericCompanyId = typeof companyId === 'string' ? parseInt(companyId, 10) : companyId;
+  const email = findClaim(['email', 'Email', 'sub', 'emailaddress', 'unique_name',
+    'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress',
+    'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name']);
+  const rawCompanyId = findClaim(['companyId', 'CompanyId', 'company_id', 'companyid', 'CompanyID']);
+  const rawHasRole = findClaim(['hasAIAnalyticsRole', 'HasAIAnalyticsRole', 'has_ai_analytics_role', 'hasaianalyticsrole']);
+  const rawIsAdmin = findClaim(['isCompanyAdmin', 'IsCompanyAdmin', 'is_company_admin', 'iscompanyadmin']);
+
+  log(`[embed-auth] Resolved: email=${email}, companyId=${rawCompanyId} (${typeof rawCompanyId}), hasAIAnalyticsRole=${rawHasRole} (${typeof rawHasRole}), isCompanyAdmin=${rawIsAdmin} (${typeof rawIsAdmin})`, 'embed-auth');
+
+  const numericCompanyId = typeof rawCompanyId === 'string' ? parseInt(rawCompanyId, 10) : rawCompanyId;
+  const boolHasRole = typeof rawHasRole === 'string' ? rawHasRole.toLowerCase() === 'true' : rawHasRole;
+  const boolIsAdmin = typeof rawIsAdmin === 'string' ? rawIsAdmin.toLowerCase() === 'true' : rawIsAdmin;
 
   if (!email || typeof email !== 'string') {
-    throw new Error(`Token missing required claim: email. Available claims: ${Object.keys(decoded).join(', ')}`);
+    throw new Error(`Token missing required claim: email. Available claims: ${claimKeys.join(', ')}`);
   }
   if (typeof numericCompanyId !== 'number' || isNaN(numericCompanyId)) {
-    throw new Error(`Token missing required claim: companyId. Available claims: ${Object.keys(decoded).join(', ')}`);
+    throw new Error(`Token missing required claim: companyId. Available claims: ${claimKeys.join(', ')}`);
   }
-  if (typeof hasAIAnalyticsRole !== 'boolean') {
-    throw new Error(`Token missing required claim: hasAIAnalyticsRole. Available claims: ${Object.keys(decoded).join(', ')}`);
+  if (typeof boolHasRole !== 'boolean') {
+    throw new Error(`Token missing required claim: hasAIAnalyticsRole. Available claims: ${claimKeys.join(', ')}`);
   }
-  if (!hasAIAnalyticsRole) {
+  if (!boolHasRole) {
     throw new Error('User does not have AI Analytics role');
   }
-  if (typeof isCompanyAdmin !== 'boolean') {
-    throw new Error(`Token missing required claim: isCompanyAdmin. Available claims: ${Object.keys(decoded).join(', ')}`);
+  if (typeof boolIsAdmin !== 'boolean') {
+    throw new Error(`Token missing required claim: isCompanyAdmin. Available claims: ${claimKeys.join(', ')}`);
   }
 
   return {
     ...decoded,
     email,
     companyId: numericCompanyId,
-    hasAIAnalyticsRole,
-    isCompanyAdmin,
+    hasAIAnalyticsRole: boolHasRole,
+    isCompanyAdmin: boolIsAdmin,
   } as EmbedTokenPayload;
 }
 
