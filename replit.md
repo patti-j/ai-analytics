@@ -91,7 +91,11 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 **Environment Variables Required:**
 - `EMBED_TOKEN_SECRET`: Secret for JWT validation (required)
 - `WEBAPP_DB_CONNECTION_STRING`: ADO.NET connection string for webapp database (AiAnalyticsUser, AiUserEntitlement, AiUserFavorite tables)
-- `PUBLISH_DB_PASSWORD`: Password for per-company Publish DB connections
+- `PUBLISH_DB_PASSWORD`: Password for per-company Publish DB connections (optional if Key Vault is configured)
+- `AZURE_KEYVAULT_URL`: Azure Key Vault URL for programmatic secret retrieval (e.g., `https://vault-name.vault.azure.net/`)
+- `AZURE_TENANT_ID`: Azure AD tenant ID for Key Vault authentication
+- `AZURE_CLIENT_ID`: Azure AD app registration client ID for Key Vault authentication
+- `AZURE_CLIENT_SECRET`: Azure AD app registration client secret for Key Vault authentication
 - `DATABASE_URL`: Existing Azure SQL Publish DB connection (for single-tenant fallback)
 
 **Navigation Icons (query.tsx header):**

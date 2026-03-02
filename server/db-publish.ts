@@ -1,4 +1,6 @@
 import sql from 'mssql';
+import { SecretClient } from '@azure/keyvault-secrets';
+import { ClientSecretCredential } from '@azure/identity';
 import { executeWebAppQuery } from './db-webapp';
 import { log } from './index';
 
@@ -12,6 +14,49 @@ interface CompanyDbRow {
 }
 
 const publishPools = new Map<number, sql.ConnectionPool>();
+const secretCache = new Map<string, string>();
+let kvClient: SecretClient | null = null;
+
+function getKeyVaultClient(): SecretClient | null {
+  if (kvClient) return kvClient;
+
+  const vaultUrl = process.env.AZURE_KEYVAULT_URL;
+  const tenantId = process.env.AZURE_TENANT_ID;
+  const clientId = process.env.AZURE_CLIENT_ID;
+  const clientSecret = process.env.AZURE_CLIENT_SECRET;
+
+  if (!vaultUrl || !tenantId || !clientId || !clientSecret) {
+    log('[db-publish] Key Vault not configured (missing AZURE_KEYVAULT_URL, AZURE_TENANT_ID, AZURE_CLIENT_ID, or AZURE_CLIENT_SECRET)', 'db-publish');
+    return null;
+  }
+
+  const credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
+  kvClient = new SecretClient(vaultUrl, credential);
+  log(`[db-publish] Key Vault client initialized for ${vaultUrl}`, 'db-publish');
+  return kvClient;
+}
+
+async function getSecretFromKeyVault(secretName: string): Promise<string | null> {
+  const cached = secretCache.get(secretName);
+  if (cached) return cached;
+
+  const client = getKeyVaultClient();
+  if (!client) return null;
+
+  try {
+    const secret = await client.getSecret(secretName);
+    if (secret.value) {
+      secretCache.set(secretName, secret.value);
+      log(`[db-publish] Retrieved secret '${secretName}' from Key Vault`, 'db-publish');
+      return secret.value;
+    }
+    log(`[db-publish] Secret '${secretName}' found in Key Vault but has no value`, 'db-publish');
+    return null;
+  } catch (err: any) {
+    log(`[db-publish] Key Vault lookup failed for '${secretName}': ${err.message}`, 'db-publish');
+    return null;
+  }
+}
 
 export async function getPublishDbConfig(companyId: number): Promise<CompanyDbRow> {
   const result = await executeWebAppQuery(
@@ -34,15 +79,26 @@ export async function getPublishDbConfig(companyId: number): Promise<CompanyDbRo
   return rows[0];
 }
 
-function getPublishDbPassword(passwordKey: string): string {
+async function getPublishDbPassword(passwordKey: string): Promise<string> {
   const fromEnv = process.env.PUBLISH_DB_PASSWORD;
-  const fromKey = process.env[passwordKey];
-  log(`[db-publish] Password lookup: PUBLISH_DB_PASSWORD=${fromEnv ? 'set' : 'not set'}, ${passwordKey}=${fromKey ? 'set' : 'not set'}`, 'db-publish');
-  const password = fromEnv || fromKey;
-  if (!password) {
-    throw new Error(`Publish DB password not found. Set PUBLISH_DB_PASSWORD or ${passwordKey} in environment.`);
+  if (fromEnv) {
+    log(`[db-publish] Password resolved from PUBLISH_DB_PASSWORD env var`, 'db-publish');
+    return fromEnv;
   }
-  return password;
+
+  const fromKeyEnv = process.env[passwordKey];
+  if (fromKeyEnv) {
+    log(`[db-publish] Password resolved from ${passwordKey} env var`, 'db-publish');
+    return fromKeyEnv;
+  }
+
+  const fromVault = await getSecretFromKeyVault(passwordKey);
+  if (fromVault) {
+    log(`[db-publish] Password resolved from Key Vault secret '${passwordKey}'`, 'db-publish');
+    return fromVault;
+  }
+
+  throw new Error(`Publish DB password not found. Checked: PUBLISH_DB_PASSWORD env, ${passwordKey} env, Key Vault secret '${passwordKey}'.`);
 }
 
 export async function getPublishPool(companyId: number): Promise<sql.ConnectionPool> {
@@ -52,7 +108,7 @@ export async function getPublishPool(companyId: number): Promise<sql.ConnectionP
   }
 
   const dbConfig = await getPublishDbConfig(companyId);
-  const password = getPublishDbPassword(dbConfig.DBPasswordKey);
+  const password = await getPublishDbPassword(dbConfig.DBPasswordKey);
 
   const config: sql.config = {
     server: dbConfig.DBServerName,
