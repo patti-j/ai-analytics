@@ -158,6 +158,16 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
       }
 
       const data = await res.json();
+      console.log('[embed-auth] Session response from server:', {
+        email: data.session?.email,
+        companyId: data.session?.companyId,
+        isCompanyAdmin: data.session?.isCompanyAdmin,
+        isPtAdmin: data.isPtAdmin,
+        isAdmin: data.isAdmin,
+        entitlementCount: data.entitlements?.length,
+        favoriteCount: data.favorites?.length,
+        scopeTypes: data.scopeTypes,
+      });
       setState(prev => ({
         ...prev,
         isAuthenticated: true,
@@ -199,6 +209,13 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
       }
 
       const payload = data.payload;
+      console.log('[embed-auth] Received PT.EMBED.AUTH from parent:', {
+        origin: event.origin,
+        hasEmbedToken: !!payload?.embedToken,
+        tokenLength: payload?.embedToken?.length,
+        ui: payload?.ui,
+        payloadKeys: payload ? Object.keys(payload) : [],
+      });
       if (!payload?.embedToken) {
         console.error('[embed-auth] PT.EMBED.AUTH message missing embedToken');
         return;
@@ -243,6 +260,14 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
       const res = await fetch('/api/session', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
+        console.log('[embed-auth] Existing session response:', {
+          email: data.email,
+          companyId: data.companyId,
+          isCompanyAdmin: data.isCompanyAdmin,
+          isPtAdmin: data.isPtAdmin,
+          isAdmin: data.isAdmin,
+          entitlementCount: data.entitlements?.length,
+        });
         setState(prev => ({
           ...prev,
           isAuthenticated: true,

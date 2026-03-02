@@ -312,14 +312,25 @@ export default function QueryPage() {
           return res.json();
         })
         .then((data: FilterOptions) => {
+          console.log('[filter-options] Server response:', {
+            planningAreas: data.planningAreas?.length,
+            scenarios: data.scenarios?.length,
+            plants: data.plants?.length,
+            resources: data.resources?.length,
+            products: data.products?.length,
+            workcenters: data.workcenters?.length,
+          });
           if (hasActualValues(data)) {
             setFilterOptions(data);
           } else {
+            console.log('[filter-options] No actual values from server, trying entitlements fallback');
             const fallback = buildFromEntitlements();
+            console.log('[filter-options] Entitlements fallback:', fallback ? 'has values' : 'empty');
             setFilterOptions(fallback || data);
           }
         })
-        .catch(() => {
+        .catch((err) => {
+          console.log('[filter-options] Fetch failed:', err.message);
           const fallback = buildFromEntitlements();
           if (fallback) setFilterOptions(fallback);
         });
