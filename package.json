@@ -12,6 +12,7 @@
   "dependencies": {
     "@azure/identity": "^4.13.0",
     "@azure/keyvault-secrets": "^4.10.0",
+    "@cookie-parser": "^1.4.6",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@radix-ui/react-accordion": "^1.2.12",
