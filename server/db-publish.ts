@@ -35,7 +35,10 @@ export async function getPublishDbConfig(companyId: number): Promise<CompanyDbRo
 }
 
 function getPublishDbPassword(passwordKey: string): string {
-  const password = process.env.PUBLISH_DB_PASSWORD || process.env[passwordKey];
+  const fromEnv = process.env.PUBLISH_DB_PASSWORD;
+  const fromKey = process.env[passwordKey];
+  log(`[db-publish] Password lookup: PUBLISH_DB_PASSWORD=${fromEnv ? 'set' : 'not set'}, ${passwordKey}=${fromKey ? 'set' : 'not set'}`, 'db-publish');
+  const password = fromEnv || fromKey;
   if (!password) {
     throw new Error(`Publish DB password not found. Set PUBLISH_DB_PASSWORD or ${passwordKey} in environment.`);
   }
