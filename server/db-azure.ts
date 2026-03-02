@@ -71,14 +71,14 @@ const hasCredentials = Boolean(
 
 if (!hasCredentials) {
   console.warn('⚠️  WARNING: Database credentials not found. Database queries will fail.');
-  console.warn('   Set DATABASE_URL (recommended) or SQL_SERVER, SQL_DATABASE, SQL_USER, SQL_PASSWORD in Replit Secrets.');
+  console.warn('   Set DATABASE_URL (recommended) or SQL_SERVER, SQL_DATABASE, SQL_USER, SQL_PASSWORD environment variables.');
 }
 
 let pool: sql.ConnectionPool | null = null;
 
 export async function getPool(): Promise<sql.ConnectionPool> {
   if (!hasCredentials) {
-    throw new Error('Database credentials not configured. Please set DATABASE_URL or discrete SQL_* secrets in Replit Secrets.');
+    throw new Error('Database credentials not configured. Please set DATABASE_URL or discrete SQL_* environment variables.');
   }
 
   if (pool && pool.connected) {

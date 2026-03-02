@@ -3,7 +3,6 @@ import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { prefetchSchema } from "./quick-questions";
 import { prefetchAllModeSchemas } from "./mode-schema-cache";
 import { runTableDiscovery } from "./table-discovery";
 import { embedSessionMiddleware } from "./embed-auth";
@@ -110,11 +109,6 @@ app.use((req, res, next) => {
   }
 
   await registerRoutes(httpServer, app);
-
-  // Prefetch schema for quick question validation (async, non-blocking)
-  prefetchSchema().catch(err => {
-    log(`Quick question schema prefetch failed: ${err.message}`, 'startup');
-  });
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

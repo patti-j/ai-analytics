@@ -5,7 +5,6 @@ import { validateAndModifySql, runValidatorSelfCheck, type ValidationOptions } f
 import { generateSqlFromQuestion, generateSuggestions, classifyQuestion, answerGeneralQuestion, generateNaturalLanguageResponse, streamNaturalLanguageResponse, cacheSuccessfulSql } from "./openai-client";
 import { log } from "./index";
 import { logQuery, getQueryAnalytics, getPopularQuestions as getPopularQuestionsDb, getFailedQueries as getFailedQueriesDb, checkUserHasPtAdminRole } from "./query-log-storage";
-import { getValidatedQuickQuestions } from "./quick-questions";
 import { getSchemasForMode, formatSchemaForPrompt, TableSchema } from "./schema-introspection";
 import { validateSqlColumns } from "./sql-column-validator";
 import { readFileSync } from "fs";
@@ -477,48 +476,6 @@ export async function registerRoutes(
     }
   });
 
-  // Get validated quick questions for a report/mode
-  // Popular queries (with results) are shown first, then static questions fill remaining slots
-  app.get("/api/quick-questions/:reportId", async (req, res) => {
-    try {
-      const reportId = req.params.reportId;
-      const maxQuestions = 5;
-      
-      // Get popular questions from DB
-      const popularFromDb = await getPopularQuestionsDb(maxQuestions);
-      const variedIcons = ['📊', '📈', '🔍', '💡', '⚡', '🎯', '📋', '✨'];
-      const popularAsQuestions = popularFromDb.map((q: any, idx: number) => ({
-        text: q.question,
-        icon: idx === 0 ? '🔥' : variedIcons[(idx - 1) % variedIcons.length],
-        isPopular: true,
-        runCount: q.count
-      }));
-      
-      // Get static quick questions from cache (validated at startup)
-      const staticQuestions = getValidatedQuickQuestions(reportId);
-      
-      // Merge: popular first, then fill with static (avoiding duplicates)
-      const popularTexts = new Set(popularFromDb.map((q: any) => q.question.toLowerCase()));
-      const filteredStatic = staticQuestions.filter(
-        q => !popularTexts.has(q.text.toLowerCase())
-      );
-      
-      // Combine: popular queries first, then static to fill remaining slots
-      const combined = [
-        ...popularAsQuestions,
-        ...filteredStatic.slice(0, maxQuestions - popularAsQuestions.length)
-      ].slice(0, maxQuestions);
-      
-      log(`Quick questions for ${reportId}: ${popularAsQuestions.length} popular + ${combined.length - popularAsQuestions.length} static`, 'quick-questions');
-      res.json({ questions: combined, reportId });
-    } catch (error: any) {
-      log(`Failed to get quick questions for report ${req.params.reportId}: ${error.message}`, 'quick-questions');
-      res.status(500).json({
-        error: 'Failed to load quick questions',
-        questions: [] // Return empty array on error
-      });
-    }
-  });
 
   // Get schema for tables (table->columns mapping)
   app.get("/api/schema/:tier", async (req, res) => {

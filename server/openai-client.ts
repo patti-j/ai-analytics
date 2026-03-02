@@ -39,7 +39,7 @@ const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_
 
 if (!apiKey) {
   console.warn('⚠️  WARNING: OpenAI API key not found. AI query generation will not work.');
-  console.warn('   Set AI_INTEGRATIONS_OPENAI_API_KEY or OPENAI_API_KEY in Replit Secrets.');
+  console.warn('   Set AI_INTEGRATIONS_OPENAI_API_KEY or OPENAI_API_KEY environment variable.');
 }
 
 export const openai = new OpenAI({
@@ -219,7 +219,7 @@ export async function generateSuggestions(question: string): Promise<string[]> {
 
 export async function generateSqlFromQuestion(question: string, options: GenerateOptions = {}): Promise<{ sql: string; selectedTables: string[]; confidence: 'high' | 'medium' | 'low' | 'none' }> {
   if (!apiKey) {
-    throw new Error('OpenAI API key not configured. Please set AI_INTEGRATIONS_OPENAI_API_KEY in Replit Secrets.');
+    throw new Error('OpenAI API key not configured. Please set AI_INTEGRATIONS_OPENAI_API_KEY environment variable.');
   }
 
   // Check cache first for consistent results
