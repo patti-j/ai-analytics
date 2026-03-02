@@ -307,7 +307,7 @@ export default function QueryPage() {
     }
 
     if (effectiveAdmin) {
-      fetch(apiUrl('/api/filter-options'))
+      fetch(apiUrl('/api/filter-options'), { credentials: 'include' })
         .then(res => {
           if (!res.ok) throw new Error(`${res.status}`);
           return res.json();
@@ -376,7 +376,7 @@ export default function QueryPage() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    fetch(apiUrl('/api/quick-questions/all'))
+    fetch(apiUrl('/api/quick-questions/all'), { credentials: 'include' })
       .then(res => res.json())
       .then(data => {
         if (data.questions) {
