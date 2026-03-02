@@ -205,13 +205,30 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     const isEmbedded = window.parent !== window;
+    console.log('[embed-auth] Init:', {
+      isEmbedded,
+      currentOrigin: window.location.origin,
+      currentUrl: window.location.href,
+      parentSameOrigin: (() => { try { return !!window.parent.location.href; } catch { return false; } })(),
+    });
 
     if (!isEmbedded) {
+      console.log('[embed-auth] Not embedded, checking existing session cookie...');
       checkExistingSession();
       return;
     }
 
+    let messageCount = 0;
     const handleMessage = (event: MessageEvent) => {
+      messageCount++;
+      const msgType = typeof event.data === 'object' ? event.data?.type : typeof event.data;
+      console.log(`[embed-auth] postMessage #${messageCount} received:`, {
+        origin: event.origin,
+        dataType: msgType,
+        dataKeys: typeof event.data === 'object' && event.data ? Object.keys(event.data) : [],
+        rawData: typeof event.data === 'string' ? event.data : undefined,
+      });
+
       if (!isAllowedOrigin(event.origin)) {
         console.warn('[embed-auth] Rejected postMessage from untrusted origin:', event.origin);
         return;
@@ -219,6 +236,7 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
 
       const data = event.data;
       if (!data || data.type !== 'PT.EMBED.AUTH' || data.version !== 1) {
+        console.log('[embed-auth] Ignoring non-auth message (type=' + (data?.type || 'none') + ', version=' + (data?.version || 'none') + ')');
         return;
       }
 
@@ -246,6 +264,7 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
 
     try {
       window.parent.postMessage('PT.EMBED.READY', '*');
+      console.log('[embed-auth] Sent PT.EMBED.READY to parent');
     } catch (err) {
       console.error('[embed-auth] Failed to post PT.EMBED.READY:', err);
     }
@@ -253,6 +272,7 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
     const timeout = setTimeout(() => {
       setState(prev => {
         if (!prev.isAuthenticated && prev.isLoading) {
+          console.error('[embed-auth] TIMEOUT after 10s. Messages received:', messageCount, '. Parent did not send valid PT.EMBED.AUTH.');
           return {
             ...prev,
             isLoading: false,
@@ -271,10 +291,12 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
 
   async function checkExistingSession() {
     try {
+      console.log('[embed-auth] Checking existing session at', apiUrl('/api/session'));
       const res = await fetch(apiUrl('/api/session'), { credentials: 'include' });
+      console.log('[embed-auth] Session check response:', res.status, res.statusText);
       if (res.ok) {
         const data = await res.json();
-        console.log('[embed-auth] Existing session response:', {
+        console.log('[embed-auth] Existing session found:', {
           email: data.email,
           companyId: data.companyId,
           isCompanyAdmin: data.isCompanyAdmin,
@@ -294,6 +316,7 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
           ...applySessionData(data),
         }));
       } else {
+        console.warn('[embed-auth] No existing session (HTTP', res.status + '). Not authenticated.');
         setState(prev => ({
           ...prev,
           isLoading: false,
@@ -301,7 +324,8 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
           error: 'Not authenticated. Session may have expired.',
         }));
       }
-    } catch {
+    } catch (err: any) {
+      console.error('[embed-auth] Session check failed:', err.message);
       setState(prev => ({
         ...prev,
         isLoading: false,
