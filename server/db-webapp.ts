@@ -1,11 +1,19 @@
 import sql from 'mssql';
 import { log } from './index';
 
+function resolveConnectionString(): string | undefined {
+  return process.env.WEBAPP_DB_CONNECTION_STRING
+    || process.env.SQLAZURECONNSTR_WEBAPP_DB_CONNECTION_STRING
+    || process.env.CUSTOMCONNSTR_WEBAPP_DB_CONNECTION_STRING
+    || process.env.SQLCONNSTR_WEBAPP_DB_CONNECTION_STRING;
+}
+
 function getWebAppConfig(): sql.config {
-  const connectionString = process.env.WEBAPP_DB_CONNECTION_STRING;
+  const connectionString = resolveConnectionString();
   if (!connectionString) {
     return { server: '', database: '', user: '', password: '', options: { encrypt: true } } as sql.config;
   }
+  log(`[db-webapp] Connection string resolved (length: ${connectionString.length})`, 'db-webapp');
 
   const params: Record<string, string> = {};
   connectionString.split(';').forEach(pair => {
