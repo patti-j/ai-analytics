@@ -23,7 +23,7 @@ import { useEmbedSession } from '@/contexts/EmbedSessionContext';
 import type { AiUserEntitlement } from '@shared/schema';
 import { apiUrl } from '@/lib/api-config';
 
-const APP_VERSION = '1.7.7'; // Remove quick-questions, fix admin user display, flexible role matching
+const APP_VERSION = '1.7.8'; // Fix permResult reference error in streaming endpoint
 
 // Columns to hide from results display (system-generated IDs are not user-friendly)
 const HIDDEN_ID_PATTERNS = [

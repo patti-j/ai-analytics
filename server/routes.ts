@@ -963,7 +963,7 @@ export async function registerRoutes(
 
       // Collect all applied filters for the response
       const allAppliedFilters = [
-        ...(permResult.appliedFilters || []),
+        ...(entResult.appliedFilters || []),
         ...(globalFilterResult.appliedFilters || [])
       ];
 
