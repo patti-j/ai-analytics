@@ -29,7 +29,7 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 - **Query Performance Monitoring:** An analytics dashboard (`/dashboard`) provides metrics on query performance, success rates, latency, and error analytics. Restricted to PT admin users only (users with `PT_*` roles in the webapp DB). Analytics data is stored in `dbo.AiQueryLog` (webapp DB) and served via `/api/admin/analytics` and `/api/admin/analytics/failed-queries` endpoints.
 - **Entitlement-Based Access Enforcement:** Server-side enforcement via `enforceEntitlements()` injects WHERE clauses based on DB-backed user entitlements (6 scope types). Non-admin users with 0 entitlements are blocked.
 - **Server-Persisted Favorites:** Favorite questions are persisted to `dbo.AiUserFavorite` (CompanyId, UserEmail, QuestionText, CreatedAt) via `/api/my-favorites` GET/POST/DELETE routes. Favorites are loaded at session init time in `EmbedSessionContext` (same pattern as entitlements) and managed via context methods (`addFavorite`, `removeFavorite`, `toggleFavorite`, `isFavorite`).
-- **Global Filters:** Six dropdown filters (Planning Area, Scenario, Plant, Resource, Product, Workcenter) matching the 6 entitlement scope types are available in the UI, applied to all queries. Default/unselected state is "None". Filter options are fetched from the per-company Publish DB (DbType=2 in CompanyDbs table) with entitlements-based intersection for non-admin users.
+- **Global Filters:** Six multi-select checkbox filters (Planning Area, Scenario, Plant, Resource, Product, Workcenter) matching the 6 entitlement scope types. Each filter has an "All" checkbox at the top (default). Multiple values can be selected, generating SQL `IN()` clauses. Filter options are fetched from the per-company Publish DB (DbType=2 in CompanyDbs table) with entitlements-based intersection for non-admin users. Component: `client/src/components/MultiSelectFilter.tsx`. Product filter has `JobProduct` column fallback for schemas without `ProductName`.
 - **SSE Streaming:** Full SSE streaming support (`/api/ask/stream`) with typing effects and a stop button is available, auto-enabled in Azure deployments.
 - **ScenarioType Filtering:** `DASHt_Planning` and `DASHt_SalesOrders` queries use the user's selected scenario from the dropdown filter.
 - **Invalid Filter Validation:** The system provides helpful messages and valid alternatives when a query returns 0 results due to non-existent filter values.
@@ -55,7 +55,7 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 **Multi-Tenant Database Access:**
 - `server/db-webapp.ts`: Connection to webapp database via `WEBAPP_DB_CONNECTION_STRING` (ADO.NET format)
 - `server/db-publish.ts`: Dynamic per-company Publish DB pools looked up from `CompanyDbs` table in webapp DB
-- `server/db-azure.ts`: Original single-tenant connection used for query execution (fallback)
+- `server/db-azure.ts`: Original single-tenant connection (no longer used as fallback; Publish DB is primary)
 
 **4 AI Tables (all in webapp DB):**
 - `dbo.AiAnalyticsUser` — user records (CompanyId + UserEmail PK)

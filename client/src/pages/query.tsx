@@ -10,7 +10,7 @@ import { ResultChart } from '@/components/result-chart';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MultiSelectFilter } from '@/components/MultiSelectFilter';
 import { exportToCSV, exportToExcel } from '@/lib/export-utils';
 import { detectDateTimeColumns, formatCellValue } from '@/lib/date-formatter';
 import { usePublishDate } from '@/hooks/usePublishDate';
@@ -23,7 +23,7 @@ import { useEmbedSession } from '@/contexts/EmbedSessionContext';
 import type { AiUserEntitlement } from '@shared/schema';
 import { apiUrl } from '@/lib/api-config';
 
-const APP_VERSION = '1.7.9'; // Remove legacy DB fallback, surface Publish DB errors directly
+const APP_VERSION = '1.8.0'; // Multi-select checkbox filters with All option
 
 // Columns to hide from results display (system-generated IDs are not user-friendly)
 const HIDDEN_ID_PATTERNS = [
@@ -188,13 +188,13 @@ export default function QueryPage() {
   const [feedbackGiven, setFeedbackGiven] = useState<'up' | 'down' | null>(null);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   
-  const [filterOptions, setFilterOptions] = useState<FilterOptions>({ planningAreas: ['None'], scenarios: [], plants: ['None'], resources: ['None'], products: ['None'], workcenters: ['None'] });
-  const [selectedPlanningArea, setSelectedPlanningArea] = useState('None');
-  const [selectedScenarioId, setSelectedScenarioId] = useState<string>('');
-  const [selectedPlant, setSelectedPlant] = useState('None');
-  const [selectedResource, setSelectedResource] = useState('None');
-  const [selectedProduct, setSelectedProduct] = useState('None');
-  const [selectedWorkcenter, setSelectedWorkcenter] = useState('None');
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({ planningAreas: [], scenarios: [], plants: [], resources: [], products: [], workcenters: [] });
+  const [selectedPlanningAreas, setSelectedPlanningAreas] = useState<string[]>([]);
+  const [selectedScenarios, setSelectedScenarios] = useState<string[]>([]);
+  const [selectedPlants, setSelectedPlants] = useState<string[]>([]);
+  const [selectedResources, setSelectedResources] = useState<string[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [selectedWorkcenters, setSelectedWorkcenters] = useState<string[]>([]);
   const [showFeedbackComment, setShowFeedbackComment] = useState(false);
   const [feedbackComment, setFeedbackComment] = useState('');
   const [dateTimeColumns, setDateTimeColumns] = useState<Set<string>>(new Set());
@@ -283,29 +283,23 @@ export default function QueryPage() {
         vals.push(e.ScopeValue);
         byScope.set(e.ScopeType, vals);
       }
-      const paValues = (byScope.get('PlanningArea') || []).sort();
-      const plantValues = (byScope.get('Plant') || []).sort();
-      const scenarioValues = (byScope.get('Scenario') || []).sort();
-      const resourceValues = (byScope.get('Resource') || []).sort();
-      const productValues = (byScope.get('Product') || []).sort();
-      const workcenterValues = (byScope.get('Workcenter') || []).sort();
       return {
-        planningAreas: ['None', ...paValues],
-        scenarios: scenarioValues.map(s => ({ id: s, name: s, type: '' })),
-        plants: ['None', ...plantValues],
-        resources: ['None', ...resourceValues],
-        products: ['None', ...productValues],
-        workcenters: ['None', ...workcenterValues],
+        planningAreas: (byScope.get('PlanningArea') || []).sort(),
+        scenarios: (byScope.get('Scenario') || []).sort().map(s => ({ id: s, name: s, type: '' })),
+        plants: (byScope.get('Plant') || []).sort(),
+        resources: (byScope.get('Resource') || []).sort(),
+        products: (byScope.get('Product') || []).sort(),
+        workcenters: (byScope.get('Workcenter') || []).sort(),
       };
     }
 
     function hasActualValues(data: FilterOptions): boolean {
-      return (data.planningAreas?.length > 1) ||
+      return (data.planningAreas?.length > 0) ||
              (data.scenarios?.length > 0) ||
-             (data.plants?.length > 1) ||
-             (data.resources?.length > 1) ||
-             (data.products?.length > 1) ||
-             (data.workcenters?.length > 1);
+             (data.plants?.length > 0) ||
+             (data.resources?.length > 0) ||
+             (data.products?.length > 0) ||
+             (data.workcenters?.length > 0);
     }
 
     if (effectiveAdmin) {
@@ -426,12 +420,12 @@ export default function QueryPage() {
           question: queryToSend,
           publishDate: anchorDateStr,
           filters: {
-            planningArea: selectedPlanningArea !== 'None' ? selectedPlanningArea : null,
-            scenarioId: selectedScenarioId || null,
-            plant: selectedPlant !== 'None' ? selectedPlant : null,
-            resource: selectedResource !== 'None' ? selectedResource : null,
-            product: selectedProduct !== 'None' ? selectedProduct : null,
-            workcenter: selectedWorkcenter !== 'None' ? selectedWorkcenter : null,
+            planningArea: selectedPlanningAreas.length > 0 ? selectedPlanningAreas : null,
+            scenarioId: selectedScenarios.length > 0 ? selectedScenarios : null,
+            plant: selectedPlants.length > 0 ? selectedPlants : null,
+            resource: selectedResources.length > 0 ? selectedResources : null,
+            product: selectedProducts.length > 0 ? selectedProducts : null,
+            workcenter: selectedWorkcenters.length > 0 ? selectedWorkcenters : null,
           }
         }),
       });
@@ -568,23 +562,23 @@ export default function QueryPage() {
     
     // Build URL with query params (GET is more proxy-friendly for SSE)
     const filterParams = new URLSearchParams();
-    if (selectedPlanningArea && selectedPlanningArea !== 'None') {
-      filterParams.set('filterPlanningArea', selectedPlanningArea);
+    if (selectedPlanningAreas.length > 0) {
+      filterParams.set('filterPlanningArea', selectedPlanningAreas.join(','));
     }
-    if (selectedScenarioId) {
-      filterParams.set('filterScenarioId', selectedScenarioId);
+    if (selectedScenarios.length > 0) {
+      filterParams.set('filterScenarioId', selectedScenarios.join(','));
     }
-    if (selectedPlant && selectedPlant !== 'None') {
-      filterParams.set('filterPlant', selectedPlant);
+    if (selectedPlants.length > 0) {
+      filterParams.set('filterPlant', selectedPlants.join(','));
     }
-    if (selectedResource && selectedResource !== 'None') {
-      filterParams.set('filterResource', selectedResource);
+    if (selectedResources.length > 0) {
+      filterParams.set('filterResource', selectedResources.join(','));
     }
-    if (selectedProduct && selectedProduct !== 'None') {
-      filterParams.set('filterProduct', selectedProduct);
+    if (selectedProducts.length > 0) {
+      filterParams.set('filterProduct', selectedProducts.join(','));
     }
-    if (selectedWorkcenter && selectedWorkcenter !== 'None') {
-      filterParams.set('filterWorkcenter', selectedWorkcenter);
+    if (selectedWorkcenters.length > 0) {
+      filterParams.set('filterWorkcenter', selectedWorkcenters.join(','));
     }
     const filterStr = filterParams.toString();
     const sidParam = sessionId ? `&_sid=${encodeURIComponent(sessionId)}` : '';
@@ -893,101 +887,63 @@ export default function QueryPage() {
               <div className="space-y-3">
                 {/* Global Filters - Above chat box */}
                 <div className="flex flex-wrap items-center gap-3 pb-2 border-b border-border/30" data-tour="global-filters">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="planning-area-filter" className="text-sm font-medium whitespace-nowrap">Planning Area:</Label>
-                    <Select value={selectedPlanningArea} onValueChange={setSelectedPlanningArea}>
-                      <SelectTrigger id="planning-area-filter" className="w-[160px] h-8 text-sm" data-testid="select-planning-area">
-                        <SelectValue placeholder="Select planning area" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(filterOptions.planningAreas || []).map((area) => (
-                          <SelectItem key={area} value={area} data-testid={`option-planning-area-${area}`}>
-                            {area}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="scenario-filter" className="text-sm font-medium whitespace-nowrap">Scenario:</Label>
-                    <Select value={selectedScenarioId || "__all__"} onValueChange={(v) => setSelectedScenarioId(v === "__all__" ? "" : v)}>
-                      <SelectTrigger id="scenario-filter" className="w-[280px] h-8 text-sm" data-testid="select-scenario">
-                        <SelectValue placeholder="All Scenarios" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__all__" data-testid="option-scenario-all">
-                          All Scenarios
-                        </SelectItem>
-                        {(filterOptions.scenarios || []).map((scenario) => (
-                          <SelectItem key={scenario.id} value={scenario.id} data-testid={`option-scenario-${scenario.id}`}>
-                            {scenario.name && scenario.type
-                              ? `${scenario.id} - ${scenario.name} (${scenario.type})`
-                              : scenario.id}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="plant-filter" className="text-sm font-medium whitespace-nowrap">Plant:</Label>
-                    <Select value={selectedPlant} onValueChange={setSelectedPlant}>
-                      <SelectTrigger id="plant-filter" className="w-[120px] h-8 text-sm" data-testid="select-plant">
-                        <SelectValue placeholder="Select plant" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(filterOptions.plants || []).map((plant) => (
-                          <SelectItem key={plant} value={plant} data-testid={`option-plant-${plant}`}>
-                            {plant}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="resource-filter" className="text-sm font-medium whitespace-nowrap">Resource:</Label>
-                    <Select value={selectedResource} onValueChange={setSelectedResource}>
-                      <SelectTrigger id="resource-filter" className="w-[160px] h-8 text-sm" data-testid="select-resource">
-                        <SelectValue placeholder="Select resource" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(filterOptions.resources || []).map((resource) => (
-                          <SelectItem key={resource} value={resource} data-testid={`option-resource-${resource}`}>
-                            {resource}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="product-filter" className="text-sm font-medium whitespace-nowrap">Product:</Label>
-                    <Select value={selectedProduct} onValueChange={setSelectedProduct}>
-                      <SelectTrigger id="product-filter" className="w-[160px] h-8 text-sm" data-testid="select-product">
-                        <SelectValue placeholder="Select product" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(filterOptions.products || []).map((product) => (
-                          <SelectItem key={product} value={product} data-testid={`option-product-${product}`}>
-                            {product}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="workcenter-filter" className="text-sm font-medium whitespace-nowrap">Workcenter:</Label>
-                    <Select value={selectedWorkcenter} onValueChange={setSelectedWorkcenter}>
-                      <SelectTrigger id="workcenter-filter" className="w-[160px] h-8 text-sm" data-testid="select-workcenter">
-                        <SelectValue placeholder="Select workcenter" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(filterOptions.workcenters || []).map((wc) => (
-                          <SelectItem key={wc} value={wc} data-testid={`option-workcenter-${wc}`}>
-                            {wc}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <MultiSelectFilter
+                    label="Planning Area"
+                    options={filterOptions.planningAreas}
+                    selected={selectedPlanningAreas}
+                    onChange={setSelectedPlanningAreas}
+                    hasAllAccess={isCompanyAdmin || isPtAdmin}
+                    width="w-[160px]"
+                    testId="select-planning-area"
+                  />
+                  <MultiSelectFilter
+                    label="Scenario"
+                    options={(filterOptions.scenarios || []).map(s => s.id)}
+                    selected={selectedScenarios}
+                    onChange={setSelectedScenarios}
+                    labels={Object.fromEntries((filterOptions.scenarios || []).map(s =>
+                      [s.id, s.name && s.type ? `${s.id} - ${s.name} (${s.type})` : s.id]
+                    ))}
+                    hasAllAccess={isCompanyAdmin || isPtAdmin}
+                    width="w-[200px]"
+                    testId="select-scenario"
+                  />
+                  <MultiSelectFilter
+                    label="Plant"
+                    options={filterOptions.plants}
+                    selected={selectedPlants}
+                    onChange={setSelectedPlants}
+                    hasAllAccess={isCompanyAdmin || isPtAdmin}
+                    width="w-[120px]"
+                    testId="select-plant"
+                  />
+                  <MultiSelectFilter
+                    label="Resource"
+                    options={filterOptions.resources}
+                    selected={selectedResources}
+                    onChange={setSelectedResources}
+                    hasAllAccess={isCompanyAdmin || isPtAdmin}
+                    width="w-[160px]"
+                    testId="select-resource"
+                  />
+                  <MultiSelectFilter
+                    label="Product"
+                    options={filterOptions.products}
+                    selected={selectedProducts}
+                    onChange={setSelectedProducts}
+                    hasAllAccess={isCompanyAdmin || isPtAdmin}
+                    width="w-[160px]"
+                    testId="select-product"
+                  />
+                  <MultiSelectFilter
+                    label="Workcenter"
+                    options={filterOptions.workcenters}
+                    selected={selectedWorkcenters}
+                    onChange={setSelectedWorkcenters}
+                    hasAllAccess={isCompanyAdmin || isPtAdmin}
+                    width="w-[160px]"
+                    testId="select-workcenter"
+                  />
                 </div>
 
                 <Textarea

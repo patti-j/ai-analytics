@@ -143,13 +143,28 @@ function injectWhereClause(sql: string, filterClause: string): string {
 }
 
 export interface GlobalFilters {
-  planningArea?: string | null;
-  scenario?: string | null;
-  scenarioId?: string | null;
-  plant?: string | null;
-  resource?: string | null;
-  product?: string | null;
-  workcenter?: string | null;
+  planningArea?: string | string[] | null;
+  scenario?: string | string[] | null;
+  scenarioId?: string | string[] | null;
+  plant?: string | string[] | null;
+  resource?: string | string[] | null;
+  product?: string | string[] | null;
+  workcenter?: string | string[] | null;
+}
+
+function normalizeFilterValues(val: string | string[] | null | undefined): string[] {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.filter(v => v && v !== 'None');
+  if (val === 'None') return [];
+  return val.split(',').map(v => v.trim()).filter(Boolean);
+}
+
+function buildInClause(column: string, values: string[]): string {
+  if (values.length === 1) {
+    return `${column} = '${values[0].replace(/'/g, "''")}'`;
+  }
+  const escaped = values.map(v => `'${v.replace(/'/g, "''")}'`).join(', ');
+  return `${column} IN (${escaped})`;
 }
 
 export function applyGlobalFilters(
@@ -160,55 +175,51 @@ export function applyGlobalFilters(
   const conditions: string[] = [];
   const appliedFilters: string[] = [];
 
-  if (filters.planningArea && filters.planningArea !== 'None') {
-    if (hasColumnInTables(PLANNING_AREA_COLUMN, tables)) {
-      const value = filters.planningArea.replace(/'/g, "''");
-      conditions.push(`${PLANNING_AREA_COLUMN} = '${value}'`);
-      appliedFilters.push(`Planning Area: ${filters.planningArea}`);
-    }
+  const paValues = normalizeFilterValues(filters.planningArea);
+  if (paValues.length > 0 && hasColumnInTables(PLANNING_AREA_COLUMN, tables)) {
+    conditions.push(buildInClause(PLANNING_AREA_COLUMN, paValues));
+    appliedFilters.push(`Planning Area: ${paValues.join(', ')}`);
   }
 
-  if (filters.scenarioId) {
-    if (hasColumnInTables(SCENARIO_COLUMN, tables)) {
-      const value = filters.scenarioId.replace(/'/g, "''");
-      conditions.push(`${SCENARIO_COLUMN} = '${value}'`);
-      appliedFilters.push(`Scenario ID: ${filters.scenarioId}`);
-    }
+  const scenarioValues = normalizeFilterValues(filters.scenarioId);
+  if (scenarioValues.length > 0 && hasColumnInTables(SCENARIO_COLUMN, tables)) {
+    conditions.push(buildInClause(SCENARIO_COLUMN, scenarioValues));
+    appliedFilters.push(`Scenario: ${scenarioValues.join(', ')}`);
   }
 
-  if (filters.plant && filters.plant !== 'None') {
+  const plantValues = normalizeFilterValues(filters.plant);
+  if (plantValues.length > 0) {
     const plantColumn = getPlantColumnForTables(tables);
     if (plantColumn) {
-      const value = filters.plant.replace(/'/g, "''");
-      conditions.push(`${plantColumn} = '${value}'`);
-      appliedFilters.push(`Plant: ${filters.plant}`);
+      conditions.push(buildInClause(plantColumn, plantValues));
+      appliedFilters.push(`Plant: ${plantValues.join(', ')}`);
     }
   }
 
-  if (filters.resource && filters.resource !== 'None') {
+  const resourceValues = normalizeFilterValues(filters.resource);
+  if (resourceValues.length > 0) {
     const match = getColumnForScopeInTables('resource', tables);
     if (match) {
-      const value = filters.resource.replace(/'/g, "''");
-      conditions.push(`${match} = '${value}'`);
-      appliedFilters.push(`Resource: ${filters.resource}`);
+      conditions.push(buildInClause(match, resourceValues));
+      appliedFilters.push(`Resource: ${resourceValues.join(', ')}`);
     }
   }
 
-  if (filters.product && filters.product !== 'None') {
+  const productValues = normalizeFilterValues(filters.product);
+  if (productValues.length > 0) {
     const match = getColumnForScopeInTables('product', tables);
     if (match) {
-      const value = filters.product.replace(/'/g, "''");
-      conditions.push(`${match} = '${value}'`);
-      appliedFilters.push(`Product: ${filters.product}`);
+      conditions.push(buildInClause(match, productValues));
+      appliedFilters.push(`Product: ${productValues.join(', ')}`);
     }
   }
 
-  if (filters.workcenter && filters.workcenter !== 'None') {
+  const wcValues = normalizeFilterValues(filters.workcenter);
+  if (wcValues.length > 0) {
     const match = getColumnForScopeInTables('workcenter', tables);
     if (match) {
-      const value = filters.workcenter.replace(/'/g, "''");
-      conditions.push(`${match} = '${value}'`);
-      appliedFilters.push(`Workcenter: ${filters.workcenter}`);
+      conditions.push(buildInClause(match, wcValues));
+      appliedFilters.push(`Workcenter: ${wcValues.join(', ')}`);
     }
   }
 
