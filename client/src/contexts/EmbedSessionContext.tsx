@@ -205,12 +205,26 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     const isEmbedded = window.parent !== window;
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlToken = urlParams.get('embedToken');
     console.log('[embed-auth] Init:', {
       isEmbedded,
       currentOrigin: window.location.origin,
       currentUrl: window.location.href,
+      hasUrlToken: !!urlToken,
+      urlTokenLength: urlToken?.length,
       parentSameOrigin: (() => { try { return !!window.parent.location.href; } catch { return false; } })(),
     });
+
+    if (urlToken) {
+      console.log('[embed-auth] Found embedToken in URL, authenticating...');
+      authenticateWithToken(urlToken);
+      if (window.history.replaceState) {
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, '', cleanUrl);
+      }
+      return;
+    }
 
     if (!isEmbedded) {
       console.log('[embed-auth] Not embedded, checking existing session cookie...');
