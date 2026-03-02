@@ -218,6 +218,11 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
 
     if (urlToken) {
       console.log('[embed-auth] Found embedToken in URL, authenticating...');
+      const urlTheme = urlParams.get('theme');
+      if (urlTheme === 'dark' || urlTheme === 'light') {
+        console.log('[embed-auth] Applying theme from URL:', urlTheme);
+        applyTheme(urlTheme);
+      }
       authenticateWithToken(urlToken);
       if (window.history.replaceState) {
         const cleanUrl = window.location.pathname;
