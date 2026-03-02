@@ -169,7 +169,17 @@ export async function registerRoutes(
       }
 
       const companyId = req.embedSession!.companyId;
-      const result = await runPublishQuery(companyId, query);
+      let result;
+      try {
+        result = await runPublishQuery(companyId, query);
+      } catch (err: any) {
+        if (scopeType === 'Product' && err.message?.includes('Invalid column')) {
+          log(`[admin-entitlements] ProductName not found, trying JobProduct fallback`, 'admin');
+          result = await runPublishQuery(companyId, "SELECT DISTINCT JobProduct AS value FROM [publish].[DASHt_Planning] WHERE JobProduct IS NOT NULL ORDER BY JobProduct");
+        } else {
+          throw err;
+        }
+      }
       const values = (result?.recordset || []).map((r: any) => r.value).filter(Boolean);
       res.json({ scopeType, values });
     } catch (error: any) {
@@ -243,7 +253,12 @@ export async function registerRoutes(
         safeQuery("scenario", "SELECT DISTINCT NewScenarioId, ScenarioName, ScenarioType FROM [publish].[DASHt_Planning] WHERE NewScenarioId IS NOT NULL ORDER BY ScenarioType, ScenarioName"),
         safeQuery("plant", "SELECT DISTINCT PlantName FROM [publish].[DASHt_Resources] WHERE PlantName IS NOT NULL ORDER BY PlantName"),
         safeQuery("resource", "SELECT DISTINCT ResourceName FROM [publish].[DASHt_Resources] WHERE ResourceName IS NOT NULL ORDER BY ResourceName"),
-        safeQuery("product", "SELECT DISTINCT TOP 500 ProductName FROM [publish].[DASHt_Planning] WHERE ProductName IS NOT NULL ORDER BY ProductName"),
+        safeQuery("product", "SELECT DISTINCT TOP 500 ProductName FROM [publish].[DASHt_Planning] WHERE ProductName IS NOT NULL ORDER BY ProductName")
+          .then(async (r) => {
+            if (r.recordset && r.recordset.length > 0) return r;
+            const fallback = await safeQuery("product-fallback", "SELECT DISTINCT TOP 500 JobProduct AS ProductName FROM [publish].[DASHt_Planning] WHERE JobProduct IS NOT NULL ORDER BY JobProduct");
+            return fallback;
+          }),
         safeQuery("workcenter", "SELECT DISTINCT WorkcenterName FROM [publish].[DASHt_Resources] WHERE WorkcenterName IS NOT NULL ORDER BY WorkcenterName"),
       ]);
 
