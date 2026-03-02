@@ -24,7 +24,7 @@ import { useEmbedSession } from '@/contexts/EmbedSessionContext';
 import type { AiUserEntitlement } from '@shared/schema';
 import { apiUrl } from '@/lib/api-config';
 
-const APP_VERSION = '1.7.2'; // Azure connection string prefix support
+const APP_VERSION = '1.7.3'; // Cross-origin cookie fix for Azure iframe
 
 // Columns to hide from results display (system-generated IDs are not user-friendly)
 const HIDDEN_ID_PATTERNS = [

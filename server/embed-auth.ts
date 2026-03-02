@@ -131,15 +131,16 @@ export async function handleSessionFromEmbed(req: Request, res: Response): Promi
     const tokenPayload = await validateEmbedToken(embedToken);
     const session = createSession(tokenPayload);
 
-    const isProduction = process.env.NODE_ENV === 'production';
+    const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV === 'production';
 
     res.cookie(SESSION_COOKIE_NAME, session.sessionId, {
       httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? 'none' : 'lax',
+      secure: isSecure,
+      sameSite: isSecure ? 'none' : 'lax',
       maxAge: SESSION_DURATION_MS,
       path: '/',
     });
+    log(`[embed-auth] Cookie set: secure=${isSecure}, sameSite=${isSecure ? 'none' : 'lax'}`, 'embed-auth');
 
     const isPtAdmin = await checkUserHasPtAdminRole(session.companyId, session.email).catch(() => false);
     const effectiveAdmin = session.isCompanyAdmin || isPtAdmin;
