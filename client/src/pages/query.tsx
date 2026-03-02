@@ -23,7 +23,7 @@ import { TourOverlay } from '@/components/TourOverlay';
 import { useEmbedSession } from '@/contexts/EmbedSessionContext';
 import type { AiUserEntitlement } from '@shared/schema';
 
-const APP_VERSION = '1.3.0'; // Publish DB filter options + admin icon fix + diagnostic logging
+const APP_VERSION = '1.3.1'; // Publish DB diagnostics endpoint + enhanced logging
 
 // Columns to hide from results display (system-generated IDs are not user-friendly)
 const HIDDEN_ID_PATTERNS = [

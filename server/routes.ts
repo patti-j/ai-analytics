@@ -28,7 +28,7 @@ import {
 import { syncMembership } from "./membership-sync";
 import { getFavoritesForUser, addFavorite as addFavoriteDb, removeFavorite as removeFavoriteDb } from "./favorites-storage";
 import { isWebAppConfigured } from "./db-webapp";
-import { executePublishQuery } from "./db-publish";
+import { executePublishQuery, getPublishDbConfig } from "./db-publish";
 
 async function runPublishQuery(companyId: number | undefined, sqlText: string) {
   if (companyId) {
@@ -575,6 +575,78 @@ export async function registerRoutes(
         ok: false,
         error: error.message || 'Database connection failed',
       });
+    }
+  });
+
+  app.get("/api/db/publish-check", async (req, res) => {
+    try {
+      const companyId = req.embedSession?.companyId;
+      const email = req.embedSession?.email;
+      const steps: any[] = [];
+
+      steps.push({ step: "session", companyId, email, hasSession: !!req.embedSession });
+
+      if (!companyId) {
+        return res.json({ ok: false, error: "No companyId in session", steps });
+      }
+
+      try {
+        const dbConfig = await getPublishDbConfig(companyId);
+        steps.push({
+          step: "companyDbs-lookup",
+          ok: true,
+          server: dbConfig.DBServerName,
+          database: dbConfig.DBName,
+          user: dbConfig.DBUserName,
+          passwordKey: dbConfig.DBPasswordKey,
+          hasPassword: !!(process.env.PUBLISH_DB_PASSWORD || process.env[dbConfig.DBPasswordKey]),
+        });
+      } catch (err: any) {
+        steps.push({ step: "companyDbs-lookup", ok: false, error: err.message });
+        return res.json({ ok: false, error: "CompanyDbs lookup failed", steps });
+      }
+
+      try {
+        const testResult = await executePublishQuery(companyId, "SELECT TOP 1 PlanningAreaName FROM [publish].[DASHt_Resources]");
+        steps.push({
+          step: "publish-query",
+          ok: true,
+          rowCount: testResult.recordset.length,
+          sample: testResult.recordset[0] || null,
+        });
+      } catch (err: any) {
+        steps.push({ step: "publish-query", ok: false, error: err.message });
+        return res.json({ ok: false, error: "Publish DB query failed", steps });
+      }
+
+      try {
+        const paResult = await executePublishQuery(companyId, "SELECT DISTINCT PlanningAreaName FROM [publish].[DASHt_Resources] WHERE PlanningAreaName IS NOT NULL");
+        const plantResult = await executePublishQuery(companyId, "SELECT DISTINCT PlantName FROM [publish].[DASHt_Resources] WHERE PlantName IS NOT NULL");
+        steps.push({
+          step: "filter-values",
+          ok: true,
+          planningAreas: paResult.recordset.map((r: any) => r.PlanningAreaName),
+          plants: plantResult.recordset.map((r: any) => r.PlantName),
+        });
+      } catch (err: any) {
+        steps.push({ step: "filter-values", ok: false, error: err.message });
+      }
+
+      try {
+        const entitlements = await getAllEntitlementsForCompany(companyId);
+        steps.push({
+          step: "company-entitlements",
+          ok: true,
+          count: entitlements.length,
+          sample: entitlements.slice(0, 5).map(e => ({ scope: e.ScopeType, value: e.ScopeValue })),
+        });
+      } catch (err: any) {
+        steps.push({ step: "company-entitlements", ok: false, error: err.message });
+      }
+
+      res.json({ ok: true, steps });
+    } catch (error: any) {
+      res.status(500).json({ ok: false, error: error.message });
     }
   });
 
