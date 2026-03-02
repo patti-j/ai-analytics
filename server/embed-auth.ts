@@ -196,14 +196,19 @@ export function embedSessionMiddleware(req: Request, res: Response, next: NextFu
   next();
 }
 
-export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+export async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
   if (!req.embedSession) {
     res.status(401).json({ error: 'Not authenticated' });
     return;
   }
-  if (!req.embedSession.isCompanyAdmin || !req.embedSession.hasAIAnalyticsRole) {
-    res.status(403).json({ error: 'Company Admin access required' });
+  if (req.embedSession.isCompanyAdmin) {
+    next();
     return;
   }
-  next();
+  const isPtAdmin = await checkUserHasPtAdminRole(req.embedSession.companyId, req.embedSession.email).catch(() => false);
+  if (isPtAdmin) {
+    next();
+    return;
+  }
+  res.status(403).json({ error: 'Company Admin access required' });
 }

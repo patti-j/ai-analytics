@@ -776,7 +776,7 @@ export default function QueryPage() {
             </p>
           </div>
           <div className="flex items-center gap-1">
-            {isCompanyAdmin && (
+            {(isCompanyAdmin || isPtAdmin) && (
               <Link href="/admin/users">
                 <Button
                   variant="ghost"
