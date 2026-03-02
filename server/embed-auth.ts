@@ -142,6 +142,7 @@ export async function handleSessionFromEmbed(req: Request, res: Response): Promi
         isCompanyAdmin: effectiveAdmin,
         expiresAt: session.expiresAt,
       },
+      sessionId: session.sessionId,
       isAdmin: effectiveAdmin,
       isPtAdmin,
       entitlements,
@@ -169,6 +170,10 @@ const UNPROTECTED_ROUTES = [
   '/api/last-update',
 ];
 
+export function getSessionIdFromCookie(req: Request): string | undefined {
+  return req.cookies?.[SESSION_COOKIE_NAME];
+}
+
 export function embedSessionMiddleware(req: Request, res: Response, next: NextFunction): void {
   if (!req.path.startsWith('/api/')) {
     next();
@@ -180,7 +185,8 @@ export function embedSessionMiddleware(req: Request, res: Response, next: NextFu
     return;
   }
 
-  const sessionId = req.cookies?.[SESSION_COOKIE_NAME];
+  const isStreamRoute = req.path === '/api/ask/stream';
+  const sessionId = req.cookies?.[SESSION_COOKIE_NAME] || (isStreamRoute ? (req.query._sid as string) : undefined);
   if (!sessionId) {
     res.status(401).json({ error: 'No session. Please authenticate via embed token.' });
     return;

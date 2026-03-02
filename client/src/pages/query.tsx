@@ -22,8 +22,9 @@ import { useTour, type TourStep } from '@/hooks/useTour';
 import { TourOverlay } from '@/components/TourOverlay';
 import { useEmbedSession } from '@/contexts/EmbedSessionContext';
 import type { AiUserEntitlement } from '@shared/schema';
+import { apiUrl } from '@/lib/api-config';
 
-const APP_VERSION = '1.3.1'; // Publish DB diagnostics endpoint + enhanced logging
+const APP_VERSION = '1.4.0'; // Cross-origin API calls for iframe embed
 
 // Columns to hide from results display (system-generated IDs are not user-friendly)
 const HIDDEN_ID_PATTERNS = [
@@ -226,7 +227,7 @@ export default function QueryPage() {
   const userScrolledRef = useRef(false);
   const lastScrollTopRef = useRef(0);
   
-  const { isAuthenticated, isCompanyAdmin, isPtAdmin, entitlements, favorites, isFavorite, toggleFavorite, removeFavorite } = useEmbedSession();
+  const { isAuthenticated, isCompanyAdmin, isPtAdmin, entitlements, favorites, isFavorite, toggleFavorite, removeFavorite, sessionId } = useEmbedSession();
   const tourSteps = useMemo(() => buildTourSteps(entitlements || [], isCompanyAdmin, isPtAdmin), [entitlements, isCompanyAdmin, isPtAdmin]);
   const tour = useTour(tourSteps);
   
@@ -306,7 +307,7 @@ export default function QueryPage() {
     }
 
     if (effectiveAdmin) {
-      fetch('/api/filter-options')
+      fetch(apiUrl('/api/filter-options'))
         .then(res => {
           if (!res.ok) throw new Error(`${res.status}`);
           return res.json();
@@ -349,7 +350,7 @@ export default function QueryPage() {
     
     setFeedbackLoading(true);
     try {
-      const response = await fetch('/api/feedback', {
+      const response = await fetch(apiUrl('/api/feedback'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -375,7 +376,7 @@ export default function QueryPage() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    fetch('/api/quick-questions/all')
+    fetch(apiUrl('/api/quick-questions/all'))
       .then(res => res.json())
       .then(data => {
         if (data.questions) {
@@ -425,7 +426,7 @@ export default function QueryPage() {
 
   const executeNonStreamingQuery = async (queryToSend: string, anchorDateStr: string) => {
     try {
-      const response = await fetch('/api/ask', {
+      const response = await fetch(apiUrl('/api/ask'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -593,7 +594,8 @@ export default function QueryPage() {
       filterParams.set('filterWorkcenter', selectedWorkcenter);
     }
     const filterStr = filterParams.toString();
-    const url = `/api/ask/stream?question=${encodeURIComponent(queryToSend)}&publishDate=${encodeURIComponent(anchorDateStr)}${filterStr ? '&' + filterStr : ''}`;
+    const sidParam = sessionId ? `&_sid=${encodeURIComponent(sessionId)}` : '';
+    const url = apiUrl(`/api/ask/stream?question=${encodeURIComponent(queryToSend)}&publishDate=${encodeURIComponent(anchorDateStr)}${filterStr ? '&' + filterStr : ''}${sidParam}`);
     console.log('[streaming] Creating EventSource for:', url);
     
     const es = new EventSource(url);

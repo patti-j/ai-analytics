@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { apiUrl } from '@/lib/api-config';
 
 interface ConfigResponse {
   simulatedToday: string | null;
@@ -9,7 +10,7 @@ export function useSimulatedToday() {
   return useQuery({
     queryKey: ['simulated-today'],
     queryFn: async (): Promise<Date | null> => {
-      const response = await fetch('/api/config');
+      const response = await fetch(apiUrl('/api/config'));
       if (!response.ok) {
         throw new Error('Failed to fetch config');
       }
@@ -38,7 +39,7 @@ export async function fetchSimulatedToday(): Promise<Date> {
   }
   
   try {
-    const response = await fetch('/api/config');
+    const response = await fetch(apiUrl('/api/config'));
     if (response.ok) {
       const data: ConfigResponse = await response.json();
       if (data.simulatedToday) {

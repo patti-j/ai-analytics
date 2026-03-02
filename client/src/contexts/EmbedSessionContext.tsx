@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import type { AiUserEntitlement } from "@shared/schema";
+import { apiUrl } from "@/lib/api-config";
 
 export interface FavoriteQuestion {
   question: string;
@@ -20,6 +21,7 @@ interface EmbedSessionState {
   favorites: FavoriteQuestion[];
   favoritesLoaded: boolean;
   isEmbedded: boolean;
+  sessionId: string | null;
 }
 
 interface EmbedSessionContextValue extends EmbedSessionState {
@@ -89,6 +91,7 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
     favorites: [],
     favoritesLoaded: false,
     isEmbedded: window.parent !== window,
+    sessionId: null,
   });
 
   const addFavorite = useCallback((question: string) => {
@@ -103,7 +106,7 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
         favorites: [{ question: trimmed, savedAt: new Date().toISOString() }, ...prev.favorites],
       };
     });
-    fetch('/api/my-favorites', {
+    fetch(apiUrl('/api/my-favorites'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -117,7 +120,7 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
       ...prev,
       favorites: prev.favorites.filter(f => f.question.trim().toLowerCase() !== normalizedQ),
     }));
-    fetch('/api/my-favorites', {
+    fetch(apiUrl('/api/my-favorites'), {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -140,7 +143,7 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
 
   const authenticateWithToken = useCallback(async (embedToken: string) => {
     try {
-      const res = await fetch('/api/session/from-embed', {
+      const res = await fetch(apiUrl('/api/session/from-embed'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -178,6 +181,7 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
         isPtAdmin: data.isPtAdmin || false,
         hasAIAnalyticsRole: true,
         error: null,
+        sessionId: data.sessionId || null,
         ...applySessionData(data),
       }));
     } catch (err: any) {
@@ -257,7 +261,7 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
 
   async function checkExistingSession() {
     try {
-      const res = await fetch('/api/session', { credentials: 'include' });
+      const res = await fetch(apiUrl('/api/session'), { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         console.log('[embed-auth] Existing session response:', {

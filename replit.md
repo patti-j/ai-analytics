@@ -40,8 +40,17 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 **Iframe Embedding:** The app supports iframe embedding within a Blazor WebApp parent via JWT-based embed auth handshake:
 - Parent sends `PT.EMBED.AUTH` postMessage with JWT embed token
 - App validates JWT (iss=PlanetTogether.WebApp, aud=PlanetTogether.EmbedApp) using `EMBED_TOKEN_SECRET`
-- Creates 8-hour HttpOnly cookie session (`pt_embed_session`) in memory
+- Creates 8-hour HttpOnly cookie session (`pt_embed_session`, `SameSite=None; Secure` in production) in memory
+- Session ID returned in `/api/session/from-embed` response for cross-origin EventSource auth (passed as `_sid` query param)
 - No dev bypass — JWT embed token required for all environments
+
+**Cross-Origin API Architecture:**
+- The iframe is loaded from the AI Analytics Azure Web App but rendered within the Blazor host context
+- All API calls use absolute URLs via `apiUrl()` helper from `client/src/lib/api-config.ts`
+- `VITE_API_BASE_URL` env var must be set to the AI Analytics Web App URL (e.g., `https://aianalytics-*.azurewebsites.net`)
+- Server has CORS middleware in `server/index.ts` allowing Azure origins with credentials
+- EventSource (SSE streaming) uses `_sid` query parameter since it doesn't support cookies cross-origin
+- Additional CORS origins can be added via `CORS_ORIGIN` env var (comma-separated)
 
 **Multi-Tenant Database Access:**
 - `server/db-webapp.ts`: Connection to webapp database via `WEBAPP_DB_CONNECTION_STRING` (ADO.NET format)

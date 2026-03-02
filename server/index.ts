@@ -17,6 +17,33 @@ declare module "http" {
   }
 }
 
+const CORS_ORIGINS = [
+  'https://reportswebapp-e3h6dzb2anb5gjaf.westus2-01.azurewebsites.net',
+  'https://planettogether.com',
+  'https://www.planettogether.com',
+  'https://app.planettogether.com',
+  'http://localhost:5173',
+  'http://localhost:3000',
+];
+if (process.env.CORS_ORIGIN) {
+  CORS_ORIGINS.push(...process.env.CORS_ORIGIN.split(',').map(s => s.trim()));
+}
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && CORS_ORIGINS.some(o => origin === o)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Diagnostics-Token');
+  }
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(204);
+    return;
+  }
+  next();
+});
+
 app.use(cookieParser());
 
 app.use(

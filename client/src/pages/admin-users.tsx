@@ -11,6 +11,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { useToast } from '@/hooks/use-toast';
 import { useEmbedSession } from '@/contexts/EmbedSessionContext';
 import { SCOPE_TYPES, type ScopeType, type AiUserEntitlement } from '@shared/schema';
+import { apiUrl } from '@/lib/api-config';
 
 interface UserRow {
   CompanyId: number;
@@ -59,7 +60,7 @@ export default function AdminUsers() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/admin/entitlements/users', { credentials: 'include' });
+      const response = await fetch(apiUrl('/api/admin/entitlements/users'), { credentials: 'include' });
       if (!response.ok) throw new Error('Failed to fetch users');
       const data = await response.json();
       setUsers(data.users || []);
@@ -75,7 +76,7 @@ export default function AdminUsers() {
 
     try {
       setLoadingScopeValues(prev => ({ ...prev, [scopeType]: true }));
-      const response = await fetch(`/api/admin/entitlements/scope-values/${scopeType}`, { credentials: 'include' });
+      const response = await fetch(apiUrl(`/api/admin/entitlements/scope-values/${scopeType}`), { credentials: 'include' });
       if (!response.ok) throw new Error(`Failed to fetch ${scopeType} values`);
       const data = await response.json();
       setScopeValues(prev => ({ ...prev, [scopeType]: data.values || [] }));
@@ -92,7 +93,7 @@ export default function AdminUsers() {
 
     try {
       setLoadingEntitlements(true);
-      const response = await fetch(`/api/admin/entitlements/users/${encodeURIComponent(email)}`, { credentials: 'include' });
+      const response = await fetch(apiUrl(`/api/admin/entitlements/users/${encodeURIComponent(email)}`), { credentials: 'include' });
       if (!response.ok) throw new Error('Failed to fetch entitlements');
       const data = await response.json();
       setEntitlements(data.entitlements || []);
@@ -166,7 +167,7 @@ export default function AdminUsers() {
 
     try {
       setSaving(true);
-      const response = await fetch(`/api/admin/entitlements/users/${encodeURIComponent(selectedEmail)}`, {
+      const response = await fetch(apiUrl(`/api/admin/entitlements/users/${encodeURIComponent(selectedEmail)}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
