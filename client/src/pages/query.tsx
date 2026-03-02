@@ -23,7 +23,7 @@ import { useEmbedSession } from '@/contexts/EmbedSessionContext';
 import type { AiUserEntitlement } from '@shared/schema';
 import { apiUrl } from '@/lib/api-config';
 
-const APP_VERSION = '1.7.8'; // Fix permResult reference error in streaming endpoint
+const APP_VERSION = '1.7.9'; // Remove legacy DB fallback, surface Publish DB errors directly
 
 // Columns to hide from results display (system-generated IDs are not user-friendly)
 const HIDDEN_ID_PATTERNS = [

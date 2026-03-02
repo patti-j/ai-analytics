@@ -31,11 +31,7 @@ import { executePublishQuery, getPublishDbConfig } from "./db-publish";
 
 async function runPublishQuery(companyId: number | undefined, sqlText: string) {
   if (companyId) {
-    try {
-      return await executePublishQuery(companyId, sqlText);
-    } catch (pubErr: any) {
-      log(`[db] Publish DB query failed for company ${companyId}, falling back to legacy: ${pubErr.message}`, 'db');
-    }
+    return await executePublishQuery(companyId, sqlText);
   }
   return await executeQuery(sqlText);
 }
