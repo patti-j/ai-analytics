@@ -6,11 +6,13 @@ import { log } from './index';
 import { getEntitlementsForUser } from './entitlement-storage';
 import { getFavoritesForUser } from './favorites-storage';
 import { checkUserHasPtAdminRole } from './query-log-storage';
+import { getSecretFromKeyVault } from './keyvault';
 
 const SESSION_COOKIE_NAME = 'pt_embed_session';
 const SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
 
 const sessions = new Map<string, EmbedSession>();
+let cachedEmbedSecret: string | null = null;
 
 setInterval(() => {
   const now = Date.now();
@@ -21,16 +23,28 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-function getEmbedSecret(): string {
-  const secret = process.env.EMBED_TOKEN_SECRET;
-  if (!secret) {
-    throw new Error('EMBED_TOKEN_SECRET environment variable is not set');
+async function getEmbedSecret(): Promise<string> {
+  if (cachedEmbedSecret) return cachedEmbedSecret;
+
+  const fromEnv = process.env.EMBED_TOKEN_SECRET;
+  if (fromEnv) {
+    log('[embed-auth] EMBED_TOKEN_SECRET resolved from env var', 'embed-auth');
+    cachedEmbedSecret = fromEnv;
+    return fromEnv;
   }
-  return secret;
+
+  const fromVault = await getSecretFromKeyVault('EMBED-TOKEN-SECRET');
+  if (fromVault) {
+    log('[embed-auth] EMBED_TOKEN_SECRET resolved from Key Vault (EMBED-TOKEN-SECRET)', 'embed-auth');
+    cachedEmbedSecret = fromVault;
+    return fromVault;
+  }
+
+  throw new Error('EMBED_TOKEN_SECRET not found. Checked: EMBED_TOKEN_SECRET env var, Key Vault secret "EMBED-TOKEN-SECRET".');
 }
 
-export function validateEmbedToken(token: string): EmbedTokenPayload {
-  const secret = getEmbedSecret();
+export async function validateEmbedToken(token: string): Promise<EmbedTokenPayload> {
+  const secret = await getEmbedSecret();
 
   const decoded = jwt.verify(token, secret, {
     algorithms: ['HS256'],
@@ -98,7 +112,7 @@ export async function handleSessionFromEmbed(req: Request, res: Response): Promi
       return;
     }
 
-    const tokenPayload = validateEmbedToken(embedToken);
+    const tokenPayload = await validateEmbedToken(embedToken);
     const session = createSession(tokenPayload);
 
     const isProduction = process.env.NODE_ENV === 'production';

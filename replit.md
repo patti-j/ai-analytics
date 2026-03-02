@@ -92,11 +92,16 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 - `EMBED_TOKEN_SECRET`: Secret for JWT validation (required)
 - `WEBAPP_DB_CONNECTION_STRING`: ADO.NET connection string for webapp database (AiAnalyticsUser, AiUserEntitlement, AiUserFavorite tables)
 - `PUBLISH_DB_PASSWORD`: Password for per-company Publish DB connections (optional if Key Vault is configured)
-- `AZURE_KEYVAULT_URL`: Azure Key Vault URL for programmatic secret retrieval (e.g., `https://vault-name.vault.azure.net/`)
-- `AZURE_TENANT_ID`: Azure AD tenant ID for Key Vault authentication
-- `AZURE_CLIENT_ID`: Azure AD app registration client ID for Key Vault authentication
-- `AZURE_CLIENT_SECRET`: Azure AD app registration client secret for Key Vault authentication
+- `AZURE_KEYVAULT_URL` (or `KEY_VAULT_URL`): Azure Key Vault URL (e.g., `https://vault-name.vault.azure.net/`)
+- `AZURE_TENANT_ID` (or `KEY_VAULT_TENANT_ID`): Azure AD tenant ID for Key Vault auth
+- `AZURE_CLIENT_ID` (or `KEY_VAULT_CLIENT_ID`): Azure AD app registration client ID
+- `AZURE_CLIENT_SECRET` (or `KEY_VAULT_CLIENT_SECRET`): Azure AD app registration client secret
 - `DATABASE_URL`: Existing Azure SQL Publish DB connection (for single-tenant fallback)
+
+**Key Vault Secrets Used:**
+- `EMBED-TOKEN-SECRET`: JWT signing key for embed token validation (also checked as `EMBED_TOKEN_SECRET` env var)
+- DB passwords via `DBPasswordKey` from CompanyDbs table (e.g., `AcmeDBPassword`)
+- Key Vault module: `server/keyvault.ts` (shared by embed-auth.ts and db-publish.ts)
 
 **Navigation Icons (query.tsx header):**
 - Users icon (admin users page) — visible to company admins (`isCompanyAdmin`)

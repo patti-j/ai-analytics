@@ -1,7 +1,6 @@
 import sql from 'mssql';
-import { SecretClient } from '@azure/keyvault-secrets';
-import { DefaultAzureCredential, ClientSecretCredential } from '@azure/identity';
 import { executeWebAppQuery } from './db-webapp';
+import { getSecretFromKeyVault } from './keyvault';
 import { log } from './index';
 
 interface CompanyDbRow {
@@ -14,56 +13,6 @@ interface CompanyDbRow {
 }
 
 const publishPools = new Map<number, sql.ConnectionPool>();
-const secretCache = new Map<string, string>();
-let kvClient: SecretClient | null = null;
-
-function getKeyVaultClient(): SecretClient | null {
-  if (kvClient) return kvClient;
-
-  const vaultUrl = process.env.AZURE_KEYVAULT_URL;
-  if (!vaultUrl) {
-    log('[db-publish] Key Vault not configured (missing AZURE_KEYVAULT_URL)', 'db-publish');
-    return null;
-  }
-
-  const tenantId = process.env.AZURE_TENANT_ID;
-  const clientId = process.env.AZURE_CLIENT_ID;
-  const clientSecret = process.env.AZURE_CLIENT_SECRET;
-
-  let credential;
-  if (tenantId && clientId && clientSecret) {
-    credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
-    log(`[db-publish] Key Vault client using ClientSecretCredential for ${vaultUrl}`, 'db-publish');
-  } else {
-    credential = new DefaultAzureCredential();
-    log(`[db-publish] Key Vault client using DefaultAzureCredential (managed identity) for ${vaultUrl}`, 'db-publish');
-  }
-
-  kvClient = new SecretClient(vaultUrl, credential);
-  return kvClient;
-}
-
-async function getSecretFromKeyVault(secretName: string): Promise<string | null> {
-  const cached = secretCache.get(secretName);
-  if (cached) return cached;
-
-  const client = getKeyVaultClient();
-  if (!client) return null;
-
-  try {
-    const secret = await client.getSecret(secretName);
-    if (secret.value) {
-      secretCache.set(secretName, secret.value);
-      log(`[db-publish] Retrieved secret '${secretName}' from Key Vault`, 'db-publish');
-      return secret.value;
-    }
-    log(`[db-publish] Secret '${secretName}' found in Key Vault but has no value`, 'db-publish');
-    return null;
-  } catch (err: any) {
-    log(`[db-publish] Key Vault lookup failed for '${secretName}': ${err.message}`, 'db-publish');
-    return null;
-  }
-}
 
 export async function getPublishDbConfig(companyId: number): Promise<CompanyDbRow> {
   const result = await executeWebAppQuery(
