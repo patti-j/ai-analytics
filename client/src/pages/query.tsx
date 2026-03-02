@@ -24,7 +24,7 @@ import { useEmbedSession } from '@/contexts/EmbedSessionContext';
 import type { AiUserEntitlement } from '@shared/schema';
 import { apiUrl } from '@/lib/api-config';
 
-const APP_VERSION = '1.5.0'; // Cross-origin API calls for iframe embed
+const APP_VERSION = '1.5.1'; // Cross-origin API calls for iframe embed
 
 // Columns to hide from results display (system-generated IDs are not user-friendly)
 const HIDDEN_ID_PATTERNS = [
@@ -270,8 +270,12 @@ export default function QueryPage() {
   const { toast } = useToast();
   
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      console.log('[filter-options] Not authenticated, skipping filter load');
+      return;
+    }
     const effectiveAdmin = isCompanyAdmin || isPtAdmin;
+    console.log('[filter-options] Loading filters: effectiveAdmin=', effectiveAdmin, 'isCompanyAdmin=', isCompanyAdmin, 'isPtAdmin=', isPtAdmin, 'entitlements=', entitlements?.length);
 
     function buildFromEntitlements(): FilterOptions | null {
       if (!entitlements || entitlements.length === 0) return null;
@@ -336,7 +340,9 @@ export default function QueryPage() {
           if (fallback) setFilterOptions(fallback);
         });
     } else {
+      console.log('[filter-options] Non-admin path, building from entitlements');
       const fromEntitlements = buildFromEntitlements();
+      console.log('[filter-options] Entitlements fallback:', fromEntitlements ? 'has values' : 'null');
       if (fromEntitlements) setFilterOptions(fromEntitlements);
     }
   }, [isAuthenticated, entitlements, isCompanyAdmin, isPtAdmin]);

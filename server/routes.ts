@@ -228,6 +228,8 @@ export async function registerRoutes(
   app.get("/api/filter-options", async (req, res) => {
     try {
       const companyId = req.embedSession?.companyId;
+      const sessionEmail = req.embedSession?.email;
+      log(`[filter-options] Request from ${sessionEmail || '(no session)'}, companyId=${companyId || '(none)'}`, 'filter-options');
 
       async function safeQuery(label: string, sql: string) {
         try {
@@ -258,6 +260,7 @@ export async function registerRoutes(
       let workcenters = (workcenterResult?.recordset || []).map((r: any) => r.WorkcenterName).filter(Boolean);
 
       const dbQueriesReturned = planningAreas.length > 0 || plants.length > 0 || resources.length > 0 || products.length > 0 || workcenters.length > 0 || scenarios.length > 0;
+      log(`[filter-options] DB query results: PA=${planningAreas.length}, Scenarios=${scenarios.length}, Plants=${plants.length}, Resources=${resources.length}, Products=${products.length}, WC=${workcenters.length}, anyReturned=${dbQueriesReturned}`, 'filter-options');
 
       if (!dbQueriesReturned && companyId) {
         log(`[filter-options] All Publish DB queries returned empty for company ${companyId}, falling back to company entitlements`, 'filter-options');
