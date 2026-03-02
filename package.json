@@ -7,10 +7,7 @@
     "dev:client": "vite dev --port 5000",
     "dev": "NODE_ENV=development tsx server/index.ts",
     "build": "npx tsx script/build.ts",
-    "prestart": "npm run build",
-    "start": "NODE_ENV=production node dist/index.cjs",
-    "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "start": "NODE_ENV=production node dist/index.cjs"
   },
   "dependencies": {
     "@azure/identity": "^4.13.0",
