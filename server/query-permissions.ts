@@ -160,7 +160,7 @@ export function applyGlobalFilters(
   const conditions: string[] = [];
   const appliedFilters: string[] = [];
 
-  if (filters.planningArea && filters.planningArea !== 'All Planning Areas') {
+  if (filters.planningArea && filters.planningArea !== 'None') {
     if (hasColumnInTables(PLANNING_AREA_COLUMN, tables)) {
       const value = filters.planningArea.replace(/'/g, "''");
       conditions.push(`${PLANNING_AREA_COLUMN} = '${value}'`);
@@ -176,7 +176,7 @@ export function applyGlobalFilters(
     }
   }
 
-  if (filters.plant && filters.plant !== 'All Plants') {
+  if (filters.plant && filters.plant !== 'None') {
     const plantColumn = getPlantColumnForTables(tables);
     if (plantColumn) {
       const value = filters.plant.replace(/'/g, "''");
@@ -185,7 +185,7 @@ export function applyGlobalFilters(
     }
   }
 
-  if (filters.resource && filters.resource !== 'All Resources') {
+  if (filters.resource && filters.resource !== 'None') {
     const match = getColumnForScopeInTables('resource', tables);
     if (match) {
       const value = filters.resource.replace(/'/g, "''");
@@ -194,7 +194,7 @@ export function applyGlobalFilters(
     }
   }
 
-  if (filters.product && filters.product !== 'All Products') {
+  if (filters.product && filters.product !== 'None') {
     const match = getColumnForScopeInTables('product', tables);
     if (match) {
       const value = filters.product.replace(/'/g, "''");
@@ -203,7 +203,7 @@ export function applyGlobalFilters(
     }
   }
 
-  if (filters.workcenter && filters.workcenter !== 'All Workcenters') {
+  if (filters.workcenter && filters.workcenter !== 'None') {
     const match = getColumnForScopeInTables('workcenter', tables);
     if (match) {
       const value = filters.workcenter.replace(/'/g, "''");

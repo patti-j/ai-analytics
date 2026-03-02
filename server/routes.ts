@@ -291,12 +291,12 @@ export async function registerRoutes(
           const entitlements = await getEntitlementsForUser(session.companyId, session.email);
           if (entitlements.length === 0) {
             return res.json({
-              planningAreas: ["All Planning Areas"],
+              planningAreas: ["None"],
               scenarios: [],
-              plants: ["All Plants"],
-              resources: ["All Resources"],
-              products: ["All Products"],
-              workcenters: ["All Workcenters"],
+              plants: ["None"],
+              resources: ["None"],
+              products: ["None"],
+              workcenters: ["None"],
               noEntitlements: true,
             });
           }
@@ -344,22 +344,22 @@ export async function registerRoutes(
       }
 
       res.json({
-        planningAreas: ["All Planning Areas", ...planningAreas],
+        planningAreas: ["None", ...planningAreas],
         scenarios: scenarios,
-        plants: ["All Plants", ...plants],
-        resources: ["All Resources", ...resources],
-        products: ["All Products", ...products],
-        workcenters: ["All Workcenters", ...workcenters],
+        plants: ["None", ...plants],
+        resources: ["None", ...resources],
+        products: ["None", ...products],
+        workcenters: ["None", ...workcenters],
       });
     } catch (error: any) {
       log(`[filter-options] Error: ${error.message}`, "error");
       res.json({
-        planningAreas: ["All Planning Areas"],
+        planningAreas: ["None"],
         scenarios: [],
-        plants: ["All Plants"],
-        resources: ["All Resources"],
-        products: ["All Products"],
-        workcenters: ["All Workcenters"],
+        plants: ["None"],
+        resources: ["None"],
+        products: ["None"],
+        workcenters: ["None"],
       });
     }
   });

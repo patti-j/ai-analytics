@@ -17,7 +17,7 @@ export async function getPublishDbConfig(companyId: number): Promise<CompanyDbRo
   const result = await executeWebAppQuery(
     `SELECT CompanyId, DbType, DBServerName, DBName, DBUserName, DBPasswordKey
      FROM dbo.CompanyDbs
-     WHERE CompanyId = @companyId AND DbType = 'Publish'`,
+     WHERE CompanyId = @companyId AND DbType = 2`,
     { companyId: { type: sql.Int, value: companyId } }
   );
 

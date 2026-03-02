@@ -190,13 +190,13 @@ export default function QueryPage() {
   const [feedbackGiven, setFeedbackGiven] = useState<'up' | 'down' | null>(null);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   
-  const [filterOptions, setFilterOptions] = useState<FilterOptions>({ planningAreas: ['All Planning Areas'], scenarios: [], plants: ['All Plants'], resources: ['All Resources'], products: ['All Products'], workcenters: ['All Workcenters'] });
-  const [selectedPlanningArea, setSelectedPlanningArea] = useState('All Planning Areas');
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({ planningAreas: ['None'], scenarios: [], plants: ['None'], resources: ['None'], products: ['None'], workcenters: ['None'] });
+  const [selectedPlanningArea, setSelectedPlanningArea] = useState('None');
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('');
-  const [selectedPlant, setSelectedPlant] = useState('All Plants');
-  const [selectedResource, setSelectedResource] = useState('All Resources');
-  const [selectedProduct, setSelectedProduct] = useState('All Products');
-  const [selectedWorkcenter, setSelectedWorkcenter] = useState('All Workcenters');
+  const [selectedPlant, setSelectedPlant] = useState('None');
+  const [selectedResource, setSelectedResource] = useState('None');
+  const [selectedProduct, setSelectedProduct] = useState('None');
+  const [selectedWorkcenter, setSelectedWorkcenter] = useState('None');
   const [showFeedbackComment, setShowFeedbackComment] = useState(false);
   const [feedbackComment, setFeedbackComment] = useState('');
   const [dateTimeColumns, setDateTimeColumns] = useState<Set<string>>(new Set());
@@ -288,12 +288,12 @@ export default function QueryPage() {
       const productValues = (byScope.get('Product') || []).sort();
       const workcenterValues = (byScope.get('Workcenter') || []).sort();
       return {
-        planningAreas: ['All Planning Areas', ...paValues],
+        planningAreas: ['None', ...paValues],
         scenarios: scenarioValues.map(s => ({ id: s, name: s, type: '' })),
-        plants: ['All Plants', ...plantValues],
-        resources: ['All Resources', ...resourceValues],
-        products: ['All Products', ...productValues],
-        workcenters: ['All Workcenters', ...workcenterValues],
+        plants: ['None', ...plantValues],
+        resources: ['None', ...resourceValues],
+        products: ['None', ...productValues],
+        workcenters: ['None', ...workcenterValues],
       };
     }
 
@@ -433,12 +433,12 @@ export default function QueryPage() {
           question: queryToSend,
           publishDate: anchorDateStr,
           filters: {
-            planningArea: selectedPlanningArea !== 'All Planning Areas' ? selectedPlanningArea : null,
+            planningArea: selectedPlanningArea !== 'None' ? selectedPlanningArea : null,
             scenarioId: selectedScenarioId || null,
-            plant: selectedPlant !== 'All Plants' ? selectedPlant : null,
-            resource: selectedResource !== 'All Resources' ? selectedResource : null,
-            product: selectedProduct !== 'All Products' ? selectedProduct : null,
-            workcenter: selectedWorkcenter !== 'All Workcenters' ? selectedWorkcenter : null,
+            plant: selectedPlant !== 'None' ? selectedPlant : null,
+            resource: selectedResource !== 'None' ? selectedResource : null,
+            product: selectedProduct !== 'None' ? selectedProduct : null,
+            workcenter: selectedWorkcenter !== 'None' ? selectedWorkcenter : null,
           }
         }),
       });
@@ -575,22 +575,22 @@ export default function QueryPage() {
     
     // Build URL with query params (GET is more proxy-friendly for SSE)
     const filterParams = new URLSearchParams();
-    if (selectedPlanningArea && selectedPlanningArea !== 'All Planning Areas') {
+    if (selectedPlanningArea && selectedPlanningArea !== 'None') {
       filterParams.set('filterPlanningArea', selectedPlanningArea);
     }
     if (selectedScenarioId) {
       filterParams.set('filterScenarioId', selectedScenarioId);
     }
-    if (selectedPlant && selectedPlant !== 'All Plants') {
+    if (selectedPlant && selectedPlant !== 'None') {
       filterParams.set('filterPlant', selectedPlant);
     }
-    if (selectedResource && selectedResource !== 'All Resources') {
+    if (selectedResource && selectedResource !== 'None') {
       filterParams.set('filterResource', selectedResource);
     }
-    if (selectedProduct && selectedProduct !== 'All Products') {
+    if (selectedProduct && selectedProduct !== 'None') {
       filterParams.set('filterProduct', selectedProduct);
     }
-    if (selectedWorkcenter && selectedWorkcenter !== 'All Workcenters') {
+    if (selectedWorkcenter && selectedWorkcenter !== 'None') {
       filterParams.set('filterWorkcenter', selectedWorkcenter);
     }
     const filterStr = filterParams.toString();
