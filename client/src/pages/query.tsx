@@ -24,7 +24,7 @@ import { useEmbedSession } from '@/contexts/EmbedSessionContext';
 import type { AiUserEntitlement } from '@shared/schema';
 import { apiUrl } from '@/lib/api-config';
 
-const APP_VERSION = '1.6.5'; // URL theme parameter support
+const APP_VERSION = '1.6.6'; // Better auth error logging
 
 // Columns to hide from results display (system-generated IDs are not user-friendly)
 const HIDDEN_ID_PATTERNS = [

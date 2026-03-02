@@ -153,15 +153,19 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
 
   const authenticateWithToken = useCallback(async (embedToken: string) => {
     try {
-      const res = await fetch(apiUrl('/api/session/from-embed'), {
+      const targetUrl = apiUrl('/api/session/from-embed');
+      console.log('[embed-auth] POST', targetUrl, '(token length:', embedToken.length + ')');
+      const res = await fetch(targetUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ embedToken }),
       });
 
+      console.log('[embed-auth] Response:', res.status, res.statusText);
       if (!res.ok) {
         const errData = await res.json().catch(() => ({ error: 'Authentication failed' }));
+        console.error('[embed-auth] Auth failed:', res.status, errData);
         setState(prev => ({
           ...prev,
           isLoading: false,
@@ -195,6 +199,7 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
         ...applySessionData(data),
       }));
     } catch (err: any) {
+      console.error('[embed-auth] Auth request exception:', err.message || err);
       setState(prev => ({
         ...prev,
         isLoading: false,
