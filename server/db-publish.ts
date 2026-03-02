@@ -1,6 +1,6 @@
 import sql from 'mssql';
 import { SecretClient } from '@azure/keyvault-secrets';
-import { ClientSecretCredential } from '@azure/identity';
+import { DefaultAzureCredential, ClientSecretCredential } from '@azure/identity';
 import { executeWebAppQuery } from './db-webapp';
 import { log } from './index';
 
@@ -21,18 +21,25 @@ function getKeyVaultClient(): SecretClient | null {
   if (kvClient) return kvClient;
 
   const vaultUrl = process.env.AZURE_KEYVAULT_URL;
+  if (!vaultUrl) {
+    log('[db-publish] Key Vault not configured (missing AZURE_KEYVAULT_URL)', 'db-publish');
+    return null;
+  }
+
   const tenantId = process.env.AZURE_TENANT_ID;
   const clientId = process.env.AZURE_CLIENT_ID;
   const clientSecret = process.env.AZURE_CLIENT_SECRET;
 
-  if (!vaultUrl || !tenantId || !clientId || !clientSecret) {
-    log('[db-publish] Key Vault not configured (missing AZURE_KEYVAULT_URL, AZURE_TENANT_ID, AZURE_CLIENT_ID, or AZURE_CLIENT_SECRET)', 'db-publish');
-    return null;
+  let credential;
+  if (tenantId && clientId && clientSecret) {
+    credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
+    log(`[db-publish] Key Vault client using ClientSecretCredential for ${vaultUrl}`, 'db-publish');
+  } else {
+    credential = new DefaultAzureCredential();
+    log(`[db-publish] Key Vault client using DefaultAzureCredential (managed identity) for ${vaultUrl}`, 'db-publish');
   }
 
-  const credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
   kvClient = new SecretClient(vaultUrl, credential);
-  log(`[db-publish] Key Vault client initialized for ${vaultUrl}`, 'db-publish');
   return kvClient;
 }
 

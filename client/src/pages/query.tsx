@@ -24,7 +24,7 @@ import { useEmbedSession } from '@/contexts/EmbedSessionContext';
 import type { AiUserEntitlement } from '@shared/schema';
 import { apiUrl } from '@/lib/api-config';
 
-const APP_VERSION = '1.6.0'; // Cross-origin API calls for iframe embed
+const APP_VERSION = '1.6.1'; // DefaultAzureCredential fallback for managed identity
 
 // Columns to hide from results display (system-generated IDs are not user-friendly)
 const HIDDEN_ID_PATTERNS = [
