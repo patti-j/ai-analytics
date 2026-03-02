@@ -43,14 +43,24 @@ const ALLOWED_ORIGINS = [
   'http://localhost:3000',
 ];
 
+const ALLOWED_ORIGIN_SUFFIXES = [
+  '.azurewebsites.net',
+];
+
 function isAllowedOrigin(origin: string): boolean {
   try {
     const url = new URL(origin);
-    return ALLOWED_ORIGINS.some(allowed => {
+    if (ALLOWED_ORIGINS.some(allowed => {
       const allowedUrl = new URL(allowed);
       return url.hostname === allowedUrl.hostname && url.protocol === allowedUrl.protocol
         && (allowedUrl.port ? url.port === allowedUrl.port : true);
-    });
+    })) {
+      return true;
+    }
+    if (url.protocol === 'https:' && ALLOWED_ORIGIN_SUFFIXES.some(suffix => url.hostname.endsWith(suffix))) {
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
