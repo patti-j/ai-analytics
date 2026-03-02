@@ -13,7 +13,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { exportToCSV, exportToExcel } from '@/lib/export-utils';
 import { detectDateTimeColumns, formatCellValue } from '@/lib/date-formatter';
-import type { QuickQuestion } from '@/config/quickQuestions';
 import { usePublishDate } from '@/hooks/usePublishDate';
 import { transformRelativeDates, hasRelativeDateLanguage } from '@/lib/date-anchor';
 import { useSimulatedToday, getSimulatedTodaySync, fetchSimulatedToday } from '@/hooks/useSimulatedToday';
@@ -24,7 +23,7 @@ import { useEmbedSession } from '@/contexts/EmbedSessionContext';
 import type { AiUserEntitlement } from '@shared/schema';
 import { apiUrl } from '@/lib/api-config';
 
-const APP_VERSION = '1.7.6'; // ProductName→JobProduct fallback for product filters
+const APP_VERSION = '1.7.7'; // Remove quick-questions, fix admin user display, flexible role matching
 
 // Columns to hide from results display (system-generated IDs are not user-friendly)
 const HIDDEN_ID_PATTERNS = [
@@ -184,7 +183,6 @@ export default function QueryPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<QueryResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [faqQuestions, setFaqQuestions] = useState<QuickQuestion[]>([]);
   const [showData, setShowData] = useState(true);
   const [showSql, setShowSql] = useState(false);
   const [feedbackGiven, setFeedbackGiven] = useState<'up' | 'down' | null>(null);
@@ -380,17 +378,6 @@ export default function QueryPage() {
     }
   };
 
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    fetch(apiUrl('/api/quick-questions/all'), { credentials: 'include' })
-      .then(res => res.json())
-      .then(data => {
-        if (data.questions) {
-          setFaqQuestions(data.questions);
-        }
-      })
-      .catch(err => console.error('Failed to load quick questions:', err));
-  }, [isAuthenticated]);
 
 
   const executeQuery = async (q: string) => {
@@ -847,38 +834,6 @@ export default function QueryPage() {
           </div>
         </div>
 
-        {/* Quick Questions - commented out, parent WebApp provides navigation
-        <div className="space-y-4" data-tour="quick-questions">
-          <h2 className="text-lg font-semibold text-foreground/80">
-            Quick questions
-          </h2>
-          
-          {faqQuestions.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-              {faqQuestions.map((q, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => { setQuestion(q.text); executeQuery(q.text); }}
-                  disabled={loading}
-                  className="group relative p-4 rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm hover:bg-primary/10 hover:border-primary/50 transition-all duration-200 text-left disabled:opacity-50 disabled:cursor-not-allowed"
-                  data-testid={`card-sample-question-${idx}`}
-                >
-                  <span className="text-2xl mb-2 block">{q.icon}</span>
-                  <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground">
-                    {q.text}
-                  </span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="p-8 text-center border border-border/50 rounded-xl bg-card/50 backdrop-blur-sm">
-              <p className="text-sm text-muted-foreground italic" data-testid="text-questions-coming-soon">
-                Quick questions: coming soon
-              </p>
-            </div>
-          )}
-        </div>
-        */}
 
         {/* Favorite Queries - Collapsible */}
         {favorites.length > 0 && (

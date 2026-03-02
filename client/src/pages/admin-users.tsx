@@ -281,9 +281,16 @@ export default function AdminUsers() {
                   <Loader2 className="h-6 w-6 animate-spin" />
                 </div>
               ) : filteredUsers.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">
-                  {searchQuery ? 'No users match your search.' : 'No users found.'}
-                </p>
+                <div className="text-center py-8 space-y-2">
+                  <p className="text-muted-foreground">
+                    {searchQuery ? 'No users match your search.' : 'No users with the AI Analytics role were found for this company.'}
+                  </p>
+                  {!searchQuery && (
+                    <p className="text-sm text-muted-foreground/70">
+                      Users need the "AI_Analytics" role assigned in the main application to appear here.
+                    </p>
+                  )}
+                </div>
               ) : (
                 <div className="space-y-1 max-h-[600px] overflow-y-auto">
                   {filteredUsers.map((user) => (

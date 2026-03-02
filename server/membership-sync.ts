@@ -16,7 +16,7 @@ export async function getEligibleUsersFromWebApp(companyId: number): Promise<Web
      INNER JOIN dbo.UserRole ur ON u.Id = ur.UsersId
      INNER JOIN dbo.Roles r ON ur.RoleId = r.Id
      WHERE u.CompanyId = @companyId
-       AND r.Name = 'AI_Analytics'
+       AND (r.Name LIKE 'AI[_]Analytics' OR r.Name LIKE 'AI[_]Analytics[_]%' OR r.Name = 'ai_analytics')
        AND u.Email IS NOT NULL
      ORDER BY u.Email`,
     { companyId: { type: sql.Int, value: companyId } }
