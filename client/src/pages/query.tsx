@@ -24,7 +24,7 @@ import { useEmbedSession } from '@/contexts/EmbedSessionContext';
 import type { AiUserEntitlement } from '@shared/schema';
 import { apiUrl } from '@/lib/api-config';
 
-const APP_VERSION = '1.7.0'; // Key Vault for EMBED_TOKEN_SECRET + shared keyvault module
+const APP_VERSION = '1.7.1'; // Flexible JWT claim name mapping
 
 // Columns to hide from results display (system-generated IDs are not user-friendly)
 const HIDDEN_ID_PATTERNS = [

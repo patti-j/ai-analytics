@@ -50,25 +50,41 @@ export async function validateEmbedToken(token: string): Promise<EmbedTokenPaylo
     algorithms: ['HS256'],
     issuer: 'PlanetTogether.WebApp',
     audience: 'PlanetTogether.EmbedApp',
-  }) as EmbedTokenPayload;
+  }) as Record<string, any>;
 
-  if (!decoded.email || typeof decoded.email !== 'string') {
-    throw new Error('Token missing required claim: email');
+  log(`[embed-auth] Token claims: ${JSON.stringify(Object.keys(decoded))}`, 'embed-auth');
+  log(`[embed-auth] Token values: email=${decoded.email}, companyId=${decoded.companyId} (${typeof decoded.companyId}), CompanyId=${decoded.CompanyId} (${typeof decoded.CompanyId}), hasAIAnalyticsRole=${decoded.hasAIAnalyticsRole}, isCompanyAdmin=${decoded.isCompanyAdmin}`, 'embed-auth');
+
+  const email = decoded.email || decoded.Email || decoded.sub;
+  const companyId = decoded.companyId ?? decoded.CompanyId ?? decoded.company_id;
+  const hasAIAnalyticsRole = decoded.hasAIAnalyticsRole ?? decoded.HasAIAnalyticsRole ?? decoded.has_ai_analytics_role;
+  const isCompanyAdmin = decoded.isCompanyAdmin ?? decoded.IsCompanyAdmin ?? decoded.is_company_admin;
+
+  const numericCompanyId = typeof companyId === 'string' ? parseInt(companyId, 10) : companyId;
+
+  if (!email || typeof email !== 'string') {
+    throw new Error(`Token missing required claim: email. Available claims: ${Object.keys(decoded).join(', ')}`);
   }
-  if (typeof decoded.companyId !== 'number') {
-    throw new Error('Token missing required claim: companyId');
+  if (typeof numericCompanyId !== 'number' || isNaN(numericCompanyId)) {
+    throw new Error(`Token missing required claim: companyId. Available claims: ${Object.keys(decoded).join(', ')}`);
   }
-  if (typeof decoded.hasAIAnalyticsRole !== 'boolean') {
-    throw new Error('Token missing required claim: hasAIAnalyticsRole');
+  if (typeof hasAIAnalyticsRole !== 'boolean') {
+    throw new Error(`Token missing required claim: hasAIAnalyticsRole. Available claims: ${Object.keys(decoded).join(', ')}`);
   }
-  if (!decoded.hasAIAnalyticsRole) {
+  if (!hasAIAnalyticsRole) {
     throw new Error('User does not have AI Analytics role');
   }
-  if (typeof decoded.isCompanyAdmin !== 'boolean') {
-    throw new Error('Token missing required claim: isCompanyAdmin');
+  if (typeof isCompanyAdmin !== 'boolean') {
+    throw new Error(`Token missing required claim: isCompanyAdmin. Available claims: ${Object.keys(decoded).join(', ')}`);
   }
 
-  return decoded;
+  return {
+    ...decoded,
+    email,
+    companyId: numericCompanyId,
+    hasAIAnalyticsRole,
+    isCompanyAdmin,
+  } as EmbedTokenPayload;
 }
 
 export function createSession(tokenPayload: EmbedTokenPayload): EmbedSession {
