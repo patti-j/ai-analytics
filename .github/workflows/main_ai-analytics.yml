@@ -3,8 +3,6 @@
 
 name: Build and deploy Node.js app to Azure Web App - ai-analytics
 
-name: Build and deploy ai-analytics to Azure Web App
-
 on:
   push:
     branches:
@@ -72,5 +70,6 @@ jobs:
           slot-name: 'Production'
           package: .
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_1039392270894C319FB878820C89C43B }}
+
 
 
