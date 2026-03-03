@@ -8,6 +8,7 @@ const allowlist = [
   "date-fns",
   "drizzle-orm",
   "drizzle-zod",
+  "cookie-parser",
   "express",
   "mssql",
   "openai",
