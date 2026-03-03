@@ -31,15 +31,6 @@ jobs:
       - name: Install dependencies (CI)
         run: npm ci       
 
-      - name: Debug - show repo root
-        run: |
-          pwd
-          ls -la
-          echo "---- script/ ----"
-          ls -la script || true
-          echo "---- find build.ts ----"
-          find . -maxdepth 4 -name "build.ts" -print
-
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
@@ -58,16 +49,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-app
-
-      - name: Debug - show downloaded artifact contents
-        run: |
-          pwd
-          ls -la app
-          echo "---- app/script/ ----"
-          ls -la app/script || true
-          echo "---- find build.ts ----"
-          find app -maxdepth 5 -name "build.ts" -print
-          
+         
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
@@ -77,3 +59,4 @@ jobs:
           package: .
 
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_F8C65168DF3B40A5B5C5739AB9B24A68 }}
+
