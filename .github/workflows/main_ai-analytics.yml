@@ -81,7 +81,7 @@ jobs:
         with:
           app-name: aianalytics
           slot-name: Production
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_1039392270894C319FB878820C89C43B
- }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_1039392270894C319FB878820C89C43B }}
           package: app
+
 
