@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ai-analytics-${{ github.ref }}
+  group: deploy-ai-analytics
   cancel-in-progress: true
 
 jobs:
@@ -70,6 +70,7 @@ jobs:
           slot-name: 'Production'
           package: .
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_1039392270894C319FB878820C89C43B }}
+
 
 
 
