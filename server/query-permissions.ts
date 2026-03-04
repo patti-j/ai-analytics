@@ -14,7 +14,7 @@ interface TableColumnMapping {
 }
 
 const TABLE_COLUMN_MAPPINGS: Record<string, TableColumnMapping> = {
-  'DASHt_Planning': { planningArea: 'PlanningAreaName', scenario: 'NewScenarioId', plant: 'BlockPlant', product: 'ProductName' },
+  'DASHt_Planning': { planningArea: 'PlanningAreaName', scenario: 'NewScenarioId', plant: 'BlockPlant', product: 'JobProduct' },
   'DASHt_SalesOrders': { planningArea: 'PlanningAreaName', scenario: 'NewScenarioId' },
   'DASHt_SalesOrderLines': { planningArea: 'PlanningAreaName', scenario: 'NewScenarioId' },
   'DASHt_CapacityPlanning': { planningArea: 'PlanningAreaName', scenario: 'NewScenarioId', plant: 'PlantName' },
@@ -69,7 +69,7 @@ function getPlantColumnForTables(tables: string[]): string | null {
 
 function hasColumnInTables(columnName: string, tables: string[]): boolean {
   const columnsPerTable: Record<string, string[]> = {
-    'DASHt_Planning': ['PlanningAreaName', 'NewScenarioId', 'BlockPlant', 'ScenarioType', 'ProductName'],
+    'DASHt_Planning': ['PlanningAreaName', 'NewScenarioId', 'BlockPlant', 'ScenarioType', 'JobProduct'],
     'DASHt_SalesOrders': ['PlanningAreaName', 'NewScenarioId', 'ScenarioType'],
     'DASHt_SalesOrderLines': ['PlanningAreaName', 'NewScenarioId'],
     'DASHt_CapacityPlanning': ['PlanningAreaName', 'NewScenarioId', 'PlantName'],
