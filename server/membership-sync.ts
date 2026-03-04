@@ -16,7 +16,7 @@ export async function getEligibleUsersFromWebApp(companyId: number): Promise<Web
      INNER JOIN dbo.UserRole ur ON u.Id = ur.UsersId
      INNER JOIN dbo.Roles r ON ur.RoleId = r.Id
      WHERE u.CompanyId = @companyId
-       AND (r.Name LIKE 'AI Analytics' OR r.Name LIKE 'AI[_]Analytics' OR r.Name = 'ai_analytics')
+       AND (r.Name LIKE 'AI[_ ]Analytics%' OR r.Name LIKE 'AI Analytics%' OR LOWER(r.Name) = 'ai_analytics')
        AND u.Email IS NOT NULL
      ORDER BY u.Email`,
     { companyId: { type: sql.Int, value: companyId } }
@@ -25,10 +25,14 @@ export async function getEligibleUsersFromWebApp(companyId: number): Promise<Web
 }
 
 export async function syncMembership(companyId: number): Promise<{ synced: number; eligible: WebAppUser[] }> {
-  log(`[membership-sync] Starting sync for company ${companyId}`, 'membership-sync');
+  log(`[membership-sync] Starting sync for company ${companyId} — querying users with AI_Analytics role variants`, 'membership-sync');
 
   const eligibleUsers = await getEligibleUsersFromWebApp(companyId);
-  log(`[membership-sync] Found ${eligibleUsers.length} eligible users with AI_Analytics role`, 'membership-sync');
+  if (eligibleUsers.length === 0) {
+    log(`[membership-sync] No eligible users found for company ${companyId}. Verify that users have a role matching AI_Analytics or AI Analytics in dbo.Roles.`, 'membership-sync');
+  } else {
+    log(`[membership-sync] Found ${eligibleUsers.length} eligible users: ${eligibleUsers.map(u => u.Email).join(', ')}`, 'membership-sync');
+  }
 
   let synced = 0;
   for (const user of eligibleUsers) {

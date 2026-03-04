@@ -65,7 +65,8 @@ export default function AdminUsers() {
       const data = await response.json();
       setUsers(data.users || []);
     } catch (error: any) {
-      toast({ title: 'Error', description: error.message || 'Failed to fetch users', variant: 'destructive' });
+      console.error('[admin-users] Failed to fetch users:', error.message);
+      toast({ title: 'Unable to load users', description: 'Please try refreshing the page.', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -281,14 +282,17 @@ export default function AdminUsers() {
                   <Loader2 className="h-6 w-6 animate-spin" />
                 </div>
               ) : filteredUsers.length === 0 ? (
-                <div className="text-center py-8 space-y-2">
-                  <p className="text-muted-foreground">
-                    {searchQuery ? 'No users match your search.' : 'No users with the AI Analytics role were found for this company.'}
-                  </p>
-                  {!searchQuery && (
-                    <p className="text-sm text-muted-foreground/70">
-                      Users need the "AI_Analytics" role assigned in the main application to appear here.
-                    </p>
+                <div className="text-center py-8 space-y-3" data-testid="empty-users-state">
+                  <Users className="h-10 w-10 mx-auto text-muted-foreground/50" />
+                  {searchQuery ? (
+                    <p className="text-sm text-muted-foreground">No users match your search.</p>
+                  ) : (
+                    <>
+                      <p className="text-sm font-medium text-muted-foreground">No users found</p>
+                      <p className="text-xs text-muted-foreground/70">
+                        Users need the "AI_Analytics" role assigned in the main application to appear here.
+                      </p>
+                    </>
                   )}
                 </div>
               ) : (
