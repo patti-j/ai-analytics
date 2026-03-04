@@ -5,7 +5,7 @@ import { log } from './index';
 
 export async function getUsersForCompany(companyId: number): Promise<AiAnalyticsUser[]> {
   const result = await executeWebAppQuery(
-    `SELECT CompanyId, UserEmail, IsActive, CreatedAt, UpdatedAt
+    `SELECT CompanyId, UserEmail, IsActive, CreatedAt
      FROM dbo.AiAnalyticsUser
      WHERE CompanyId = @companyId
      ORDER BY UserEmail`,
@@ -16,7 +16,7 @@ export async function getUsersForCompany(companyId: number): Promise<AiAnalytics
 
 export async function getUser(companyId: number, email: string): Promise<AiAnalyticsUser | null> {
   const result = await executeWebAppQuery(
-    `SELECT CompanyId, UserEmail, IsActive, CreatedAt, UpdatedAt
+    `SELECT CompanyId, UserEmail, IsActive, CreatedAt
      FROM dbo.AiAnalyticsUser
      WHERE CompanyId = @companyId AND UserEmail = @email`,
     {
