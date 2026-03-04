@@ -8,6 +8,8 @@ const allowlist = [
   "date-fns",
   "drizzle-orm",
   "drizzle-zod",
+  "@azure/identity",
+  "@azure/keyvault-secrets",
   "cookie-parser",
   "express",
   "mssql",
