@@ -25,7 +25,6 @@ export interface AiAnalyticsUser {
   CompanyId: number;
   UserEmail: string;
   IsActive: boolean;
-  CreatedAt: string;
   UpdatedAt: string;
 }
 
@@ -55,7 +54,6 @@ export interface EmbedSession {
   companyId: number;
   isCompanyAdmin: boolean;
   hasAIAnalyticsRole: boolean;
-  createdAt: number;
   expiresAt: number;
 }
 
