@@ -11,7 +11,7 @@ export function usePublishDate() {
     queryKey: ['publish-date'],
     queryFn: async (): Promise<Date | null> => {
       try {
-        const response = await fetch(apiUrl('/api/last-update'));
+        const response = await fetch(apiUrl('/api/last-update'), { credentials: 'include' });
         if (!response.ok) return null;
         const data: PublishDateResponse = await response.json();
         if (data.ok && data.lastUpdate) {

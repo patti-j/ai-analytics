@@ -624,6 +624,10 @@ export async function registerRoutes(
   app.get("/api/last-update", async (req, res) => {
     try {
       const companyId = req.embedSession?.companyId;
+      if (!companyId) {
+        res.json({ ok: true, lastUpdate: null });
+        return;
+      }
       const result = await runPublishQuery(companyId, 'SELECT TOP (1) MAX(PublishDate) as lastUpdate FROM [publish].[DASHt_Planning]');
       const lastUpdate = result.recordset[0]?.lastUpdate || null;
       res.json({ ok: true, lastUpdate });

@@ -212,7 +212,6 @@ const UNPROTECTED_ROUTES = [
   '/api/session/from-embed',
   '/api/health',
   '/api/config',
-  '/api/last-update',
 ];
 
 export function getSessionIdFromCookie(req: Request): string | undefined {
