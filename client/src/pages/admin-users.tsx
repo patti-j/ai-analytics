@@ -18,7 +18,6 @@ interface UserRow {
   UserEmail: string;
   IsActive: boolean;
   CreatedAt: string;
-  UpdatedAt: string;
   hasEntitlements: boolean;
   entitlementCount: number;
 }

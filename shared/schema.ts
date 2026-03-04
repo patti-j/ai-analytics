@@ -25,7 +25,7 @@ export interface AiAnalyticsUser {
   CompanyId: number;
   UserEmail: string;
   IsActive: boolean;
-  UpdatedAt: string;
+  CreatedAt: string;
 }
 
 export interface AiUserEntitlement {

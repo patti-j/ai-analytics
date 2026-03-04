@@ -33,10 +33,10 @@ export async function upsertUser(companyId: number, email: string, isActive: boo
      USING (SELECT @companyId AS CompanyId, @email AS UserEmail) AS source
      ON target.CompanyId = source.CompanyId AND target.UserEmail = source.UserEmail
      WHEN MATCHED THEN
-       UPDATE SET IsActive = @isActive, UpdatedAt = GETUTCDATE()
+       UPDATE SET IsActive = @isActive
      WHEN NOT MATCHED THEN
-       INSERT (CompanyId, UserEmail, IsActive, CreatedAt, UpdatedAt)
-       VALUES (@companyId, @email, @isActive, GETUTCDATE(), GETUTCDATE());`,
+       INSERT (CompanyId, UserEmail, IsActive, CreatedAt)
+       VALUES (@companyId, @email, @isActive, GETUTCDATE());`,
     {
       companyId: { type: sql.Int, value: companyId },
       email: { type: sql.NVarChar(256), value: email },
@@ -128,13 +128,13 @@ export interface UserWithEntitlementStatus extends AiAnalyticsUser {
 
 export async function getUsersWithEntitlementStatus(companyId: number): Promise<UserWithEntitlementStatus[]> {
   const result = await executeWebAppQuery(
-    `SELECT u.CompanyId, u.UserEmail, u.IsActive, u.CreatedAt, u.UpdatedAt,
+    `SELECT u.CompanyId, u.UserEmail, u.IsActive, u.CreatedAt,
             CASE WHEN COUNT(e.ScopeType) > 0 THEN 1 ELSE 0 END AS hasEntitlements,
             COUNT(e.ScopeType) AS entitlementCount
      FROM dbo.AiAnalyticsUser u
      LEFT JOIN dbo.AiUserEntitlement e ON u.CompanyId = e.CompanyId AND u.UserEmail = e.UserEmail
      WHERE u.CompanyId = @companyId
-     GROUP BY u.CompanyId, u.UserEmail, u.IsActive, u.CreatedAt, u.UpdatedAt
+     GROUP BY u.CompanyId, u.UserEmail, u.IsActive, u.CreatedAt
      ORDER BY u.UserEmail`,
     { companyId: { type: sql.Int, value: companyId } }
   );
