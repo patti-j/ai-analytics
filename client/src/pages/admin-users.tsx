@@ -61,12 +61,16 @@ export default function AdminUsers() {
     try {
       setLoading(true);
       const response = await fetch(apiUrl('/api/admin/entitlements/users'), { credentials: 'include' });
-      if (!response.ok) throw new Error('Failed to fetch users');
+      if (!response.ok) {
+        const errBody = await response.text().catch(() => '');
+        console.error(`[admin-users] Fetch users failed: ${response.status} ${response.statusText}`, errBody);
+        throw new Error(errBody ? JSON.parse(errBody)?.error || `Server error (${response.status})` : `Server error (${response.status})`);
+      }
       const data = await response.json();
       setUsers(data.users || []);
     } catch (error: any) {
       console.error('[admin-users] Failed to fetch users:', error.message);
-      toast({ title: 'Unable to load users', description: 'Please try refreshing the page.', variant: 'destructive' });
+      toast({ title: 'Unable to load users', description: error.message || 'Please try refreshing the page.', variant: 'destructive' });
     } finally {
       setLoading(false);
     }

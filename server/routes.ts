@@ -96,8 +96,8 @@ export async function registerRoutes(
       const users = await getUsersWithEntitlementStatus(companyId);
       res.json({ users });
     } catch (error: any) {
-      log(`[admin-entitlements] Error fetching users: ${error.message}`, 'error');
-      res.status(500).json({ error: 'Failed to fetch users' });
+      log(`[admin-entitlements] Error fetching users: ${error.message}\n${error.stack}`, 'error');
+      res.status(500).json({ error: error.message || 'Failed to fetch users' });
     }
   });
 
