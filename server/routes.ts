@@ -41,11 +41,6 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
-  // Health check endpoint
-  app.get("/api/health", (_req, res) => {
-    res.json({ ok: true });
-  });
-
   // Embed auth: create session from JWT token
   app.post("/api/session/from-embed", handleSessionFromEmbed);
 
