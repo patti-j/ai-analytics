@@ -178,53 +178,53 @@ export function applyGlobalFilters(
   const paValues = normalizeFilterValues(filters.planningArea);
   if (paValues.length > 0 && hasColumnInTables(PLANNING_AREA_COLUMN, tables)) {
     conditions.push(buildInClause(PLANNING_AREA_COLUMN, paValues));
-    appliedFilters.push(`Planning Area: ${paValues.join(', ')}`);
   }
+  appliedFilters.push(`Planning Area: ${paValues.length > 0 ? paValues.join(', ') : 'All'}`);
 
   const scenarioValues = normalizeFilterValues(filters.scenarioId);
   if (scenarioValues.length > 0 && hasColumnInTables(SCENARIO_COLUMN, tables)) {
     conditions.push(buildInClause(SCENARIO_COLUMN, scenarioValues));
-    appliedFilters.push(`Scenario: ${scenarioValues.join(', ')}`);
   }
+  appliedFilters.push(`Scenario: ${scenarioValues.length > 0 ? scenarioValues.join(', ') : 'All'}`);
 
   const plantValues = normalizeFilterValues(filters.plant);
   if (plantValues.length > 0) {
     const plantColumn = getPlantColumnForTables(tables);
     if (plantColumn) {
       conditions.push(buildInClause(plantColumn, plantValues));
-      appliedFilters.push(`Plant: ${plantValues.join(', ')}`);
     }
   }
+  appliedFilters.push(`Plant: ${plantValues.length > 0 ? plantValues.join(', ') : 'All'}`);
 
   const resourceValues = normalizeFilterValues(filters.resource);
   if (resourceValues.length > 0) {
     const match = getColumnForScopeInTables('resource', tables);
     if (match) {
       conditions.push(buildInClause(match, resourceValues));
-      appliedFilters.push(`Resource: ${resourceValues.join(', ')}`);
     }
   }
+  appliedFilters.push(`Resource: ${resourceValues.length > 0 ? resourceValues.join(', ') : 'All'}`);
 
   const productValues = normalizeFilterValues(filters.product);
   if (productValues.length > 0) {
     const match = getColumnForScopeInTables('product', tables);
     if (match) {
       conditions.push(buildInClause(match, productValues));
-      appliedFilters.push(`Product: ${productValues.join(', ')}`);
     }
   }
+  appliedFilters.push(`Product: ${productValues.length > 0 ? productValues.join(', ') : 'All'}`);
 
   const wcValues = normalizeFilterValues(filters.workcenter);
   if (wcValues.length > 0) {
     const match = getColumnForScopeInTables('workcenter', tables);
     if (match) {
       conditions.push(buildInClause(match, wcValues));
-      appliedFilters.push(`Workcenter: ${wcValues.join(', ')}`);
     }
   }
+  appliedFilters.push(`Workcenter: ${wcValues.length > 0 ? wcValues.join(', ') : 'All'}`);
 
   if (conditions.length === 0) {
-    return { modifiedSql: sql, appliedFilters: [] };
+    return { modifiedSql: sql, appliedFilters };
   }
 
   const filterClause = conditions.join(' AND ');
