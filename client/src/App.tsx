@@ -44,7 +44,7 @@ function AppContent() {
 
 function App() {
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="query-insight-theme">
+    <ThemeProvider defaultTheme="light" storageKey="query-insight-theme">
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <EmbedSessionProvider>
