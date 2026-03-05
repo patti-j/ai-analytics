@@ -227,14 +227,13 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
     }
 
     let messageCount = 0;
+    let authenticated = false;
     const handleMessage = (event: MessageEvent) => {
       messageCount++;
       const msgType = typeof event.data === 'object' ? event.data?.type : typeof event.data;
       console.log(`[embed-auth] postMessage #${messageCount} received:`, {
         origin: event.origin,
         dataType: msgType,
-        dataKeys: typeof event.data === 'object' && event.data ? Object.keys(event.data) : [],
-        rawData: typeof event.data === 'string' ? event.data : undefined,
       });
 
       if (!isAllowedOrigin(event.origin)) {
@@ -244,18 +243,18 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
 
       const data = event.data;
       if (!data || data.type !== 'PT.EMBED.AUTH' || data.version !== 1) {
-        console.log('[embed-auth] Ignoring non-auth message (type=' + (data?.type || 'none') + ', version=' + (data?.version || 'none') + ')');
+        return;
+      }
+
+      if (authenticated) {
+        console.log('[embed-auth] Already authenticated, ignoring duplicate PT.EMBED.AUTH');
+        if (data.payload?.ui?.theme) {
+          applyTheme(data.payload.ui.theme);
+        }
         return;
       }
 
       const payload = data.payload;
-      console.log('[embed-auth] Received PT.EMBED.AUTH from parent:', {
-        origin: event.origin,
-        hasEmbedToken: !!payload?.embedToken,
-        tokenLength: payload?.embedToken?.length,
-        ui: payload?.ui,
-        payloadKeys: payload ? Object.keys(payload) : [],
-      });
       if (!payload?.embedToken) {
         console.error('[embed-auth] PT.EMBED.AUTH message missing embedToken');
         return;
@@ -265,6 +264,7 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
         applyTheme(payload.ui.theme);
       }
 
+      authenticated = true;
       authenticateWithToken(payload.embedToken);
     };
 
