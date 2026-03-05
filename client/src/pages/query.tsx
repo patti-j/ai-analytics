@@ -332,10 +332,31 @@ export default function QueryPage() {
           if (fallback) setFilterOptions(fallback);
         });
     } else {
-      console.log('[filter-options] Non-admin path, building from entitlements');
-      const fromEntitlements = buildFromEntitlements();
-      console.log('[filter-options] Entitlements fallback:', fromEntitlements ? 'has values' : 'null');
-      if (fromEntitlements) setFilterOptions(fromEntitlements);
+      console.log('[filter-options] Non-admin path, fetching from server with entitlement filtering');
+      fetch(apiUrl('/api/filter-options'), { credentials: 'include' })
+        .then(res => {
+          if (!res.ok) throw new Error(`${res.status}`);
+          return res.json();
+        })
+        .then((data: FilterOptions & { noEntitlements?: boolean }) => {
+          console.log('[filter-options] Server response (non-admin):', {
+            planningAreas: data.planningAreas?.length,
+            scenarios: data.scenarios?.length,
+            plants: data.plants?.length,
+            noEntitlements: data.noEntitlements,
+          });
+          if (hasActualValues(data)) {
+            setFilterOptions(data);
+          } else {
+            const fallback = buildFromEntitlements();
+            if (fallback) setFilterOptions(fallback);
+          }
+        })
+        .catch((err) => {
+          console.log('[filter-options] Non-admin fetch failed:', err.message);
+          const fallback = buildFromEntitlements();
+          if (fallback) setFilterOptions(fallback);
+        });
     }
   }, [isAuthenticated, entitlements, isCompanyAdmin, isPtAdmin]);
 
@@ -885,6 +906,12 @@ export default function QueryPage() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-3">
+                {!isCompanyAdmin && !isPtAdmin && entitlements.length === 0 && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-sm" data-testid="no-entitlements-banner">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                    <span>Your data access has not been configured yet. Contact your company administrator to get access.</span>
+                  </div>
+                )}
                 {/* Global Filters - Above chat box */}
                 <div className="flex flex-wrap items-center gap-3 pb-2 border-b border-border/30" data-tour="global-filters">
                   <MultiSelectFilter
