@@ -48,7 +48,7 @@ export async function upsertUser(companyId: number, email: string, isActive: boo
 
 export async function getEntitlementsForUser(companyId: number, email: string): Promise<AiUserEntitlement[]> {
   const result = await executeWebAppQuery(
-    `SELECT CompanyId, UserEmail, ScopeType, ScopeValue, GrantedByEmail, GrantedAt
+    `SELECT CompanyId, UserEmail, ScopeType, ScopeValue
      FROM dbo.AiUserEntitlement
      WHERE CompanyId = @companyId AND UserEmail = @email
      ORDER BY ScopeType, ScopeValue`,
@@ -95,14 +95,13 @@ export async function replaceEntitlements(
       continue;
     }
     await executeWebAppQuery(
-      `INSERT INTO dbo.AiUserEntitlement (CompanyId, UserEmail, ScopeType, ScopeValue, GrantedByEmail, GrantedAt)
-       VALUES (@companyId, @email, @scopeType, @scopeValue, @grantedBy, GETUTCDATE())`,
+      `INSERT INTO dbo.AiUserEntitlement (CompanyId, UserEmail, ScopeType, ScopeValue)
+       VALUES (@companyId, @email, @scopeType, @scopeValue)`,
       {
         companyId: { type: sql.Int, value: companyId },
         email: { type: sql.NVarChar(256), value: userEmail },
         scopeType: { type: sql.NVarChar(50), value: scope.scopeType },
         scopeValue: { type: sql.NVarChar(256), value: scope.scopeValue },
-        grantedBy: { type: sql.NVarChar(256), value: grantedByEmail },
       }
     );
   }
@@ -112,7 +111,7 @@ export async function replaceEntitlements(
 
 export async function getAllEntitlementsForCompany(companyId: number): Promise<AiUserEntitlement[]> {
   const result = await executeWebAppQuery(
-    `SELECT CompanyId, UserEmail, ScopeType, ScopeValue, GrantedByEmail, GrantedAt
+    `SELECT CompanyId, UserEmail, ScopeType, ScopeValue
      FROM dbo.AiUserEntitlement
      WHERE CompanyId = @companyId
      ORDER BY UserEmail, ScopeType, ScopeValue`,

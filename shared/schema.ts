@@ -32,8 +32,6 @@ export interface AiUserEntitlement {
   UserEmail: string;
   ScopeType: ScopeType;
   ScopeValue: string;
-  GrantedByEmail: string;
-  GrantedAt: string;
 }
 
 export interface EmbedTokenPayload {
