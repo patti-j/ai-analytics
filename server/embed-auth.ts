@@ -73,8 +73,8 @@ export async function validateEmbedToken(token: string): Promise<EmbedTokenPaylo
   log(`[embed-auth] Resolved: email=${email}, companyId=${rawCompanyId} (${typeof rawCompanyId}), hasAIAnalyticsRole=${rawHasRole} (${typeof rawHasRole}), isCompanyAdmin=${rawIsAdmin} (${typeof rawIsAdmin})`, 'embed-auth');
 
   const numericCompanyId = typeof rawCompanyId === 'string' ? parseInt(rawCompanyId, 10) : rawCompanyId;
-  const boolHasRole = typeof rawHasRole === 'string' ? rawHasRole.toLowerCase() === 'true' : rawHasRole;
-  const boolIsAdmin = typeof rawIsAdmin === 'string' ? rawIsAdmin.toLowerCase() === 'true' : rawIsAdmin;
+  const boolHasRole = typeof rawHasRole === 'string' ? rawHasRole.toLowerCase() === 'true' : (rawHasRole === 1 ? true : rawHasRole === 0 ? false : rawHasRole);
+  const boolIsAdmin = typeof rawIsAdmin === 'string' ? rawIsAdmin.toLowerCase() === 'true' : (rawIsAdmin === 1 ? true : rawIsAdmin === 0 ? false : rawIsAdmin);
 
   if (!email || typeof email !== 'string') {
     throw new Error(`Token missing required claim: email. Available claims: ${claimKeys.join(', ')}`);
