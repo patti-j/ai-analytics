@@ -210,35 +210,19 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     const isEmbedded = window.parent !== window;
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlToken = urlParams.get('embedToken');
     console.log('[embed-auth] Init:', {
       isEmbedded,
       currentOrigin: window.location.origin,
-      currentUrl: window.location.href,
-      hasUrlToken: !!urlToken,
-      urlTokenLength: urlToken?.length,
-      parentSameOrigin: (() => { try { return !!window.parent.location.href; } catch { return false; } })(),
     });
 
-    if (urlToken) {
-      console.log('[embed-auth] Found embedToken in URL, authenticating...');
-      const urlTheme = urlParams.get('theme');
-      if (urlTheme === 'dark' || urlTheme === 'light') {
-        console.log('[embed-auth] Applying theme from URL:', urlTheme);
-        applyTheme(urlTheme);
-      }
-      authenticateWithToken(urlToken);
-      if (window.history.replaceState) {
-        const cleanUrl = window.location.pathname;
-        window.history.replaceState({}, '', cleanUrl);
-      }
-      return;
-    }
-
     if (!isEmbedded) {
-      console.log('[embed-auth] Not embedded, checking existing session cookie...');
-      checkExistingSession();
+      console.error('[embed-auth] Not embedded in an iframe. This app must be loaded within the Blazor parent application.');
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        isAuthenticated: false,
+        error: 'This application must be accessed through the parent application.',
+      }));
       return;
     }
 
@@ -312,52 +296,6 @@ export function EmbedSessionProvider({ children }: { children: React.ReactNode }
       clearTimeout(timeout);
     };
   }, [authenticateWithToken]);
-
-  async function checkExistingSession() {
-    try {
-      console.log('[embed-auth] Checking existing session at', apiUrl('/api/session'));
-      const res = await fetch(apiUrl('/api/session'), { credentials: 'include' });
-      console.log('[embed-auth] Session check response:', res.status, res.statusText);
-      if (res.ok) {
-        const data = await res.json();
-        console.log('[embed-auth] Existing session found:', {
-          email: data.email,
-          companyId: data.companyId,
-          isCompanyAdmin: data.isCompanyAdmin,
-          isPtAdmin: data.isPtAdmin,
-          isAdmin: data.isAdmin,
-          entitlementCount: data.entitlements?.length,
-        });
-        setState(prev => ({
-          ...prev,
-          isAuthenticated: true,
-          isLoading: false,
-          email: data.email,
-          companyId: data.companyId,
-          isCompanyAdmin: data.isCompanyAdmin,
-          isPtAdmin: data.isPtAdmin || false,
-          hasAIAnalyticsRole: data.hasAIAnalyticsRole,
-          ...applySessionData(data),
-        }));
-      } else {
-        console.warn('[embed-auth] No existing session (HTTP', res.status + '). Not authenticated.');
-        setState(prev => ({
-          ...prev,
-          isLoading: false,
-          isAuthenticated: false,
-          error: 'Not authenticated. Session may have expired.',
-        }));
-      }
-    } catch (err: any) {
-      console.error('[embed-auth] Session check failed:', err.message);
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        isAuthenticated: false,
-        error: 'Unable to reach the server.',
-      }));
-    }
-  }
 
   const contextValue: EmbedSessionContextValue = {
     ...state,
