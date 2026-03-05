@@ -94,16 +94,7 @@ export async function registerRoutes(
       }
 
       const users = await getUsersWithEntitlementStatus(companyId);
-
-      const nonAdminUsers = [];
-      for (const user of users) {
-        const isPtAdmin = await checkUserHasPtAdminRole(companyId, user.UserEmail).catch(() => false);
-        if (!isPtAdmin) {
-          nonAdminUsers.push(user);
-        }
-      }
-
-      res.json({ users: nonAdminUsers });
+      res.json({ users });
     } catch (error: any) {
       log(`[admin-entitlements] Error fetching users: ${error.message}\n${error.stack}`, 'error');
       res.status(500).json({ error: error.message || 'Failed to fetch users' });
