@@ -47,6 +47,7 @@ export async function upsertUser(companyId: number, email: string, isActive: boo
 }
 
 export async function getEntitlementsForUser(companyId: number, email: string): Promise<AiUserEntitlement[]> {
+  log(`[entitlements] Querying entitlements for email="${email}" companyId=${companyId}`, 'entitlements');
   const result = await executeWebAppQuery(
     `SELECT CompanyId, UserEmail, ScopeType, ScopeValue
      FROM dbo.AiUserEntitlement
@@ -57,6 +58,36 @@ export async function getEntitlementsForUser(companyId: number, email: string): 
       email: { type: sql.NVarChar(256), value: email },
     }
   );
+  log(`[entitlements] Query returned ${result.recordset.length} rows for email="${email}" companyId=${companyId}`, 'entitlements');
+  if (result.recordset.length === 0) {
+    try {
+      const diagResult = await executeWebAppQuery(
+        `SELECT TOP 1 UserEmail, COUNT(*) AS cnt
+         FROM dbo.AiUserEntitlement
+         WHERE CompanyId = @companyId
+         GROUP BY UserEmail
+         HAVING UserEmail LIKE @emailPattern
+         ORDER BY cnt DESC`,
+        {
+          companyId: { type: sql.Int, value: companyId },
+          emailPattern: { type: sql.NVarChar(256), value: `%${email.split('@')[0]}%` },
+        }
+      );
+      if (diagResult.recordset.length > 0) {
+        const dbEmail = diagResult.recordset[0].UserEmail;
+        const dbCount = diagResult.recordset[0].cnt;
+        log(`[entitlements] MISMATCH? DB has ${dbCount} entitlements for "${dbEmail}" but JWT email is "${email}"`, 'entitlements');
+      } else {
+        const totalResult = await executeWebAppQuery(
+          `SELECT COUNT(*) AS total FROM dbo.AiUserEntitlement WHERE CompanyId = @companyId`,
+          { companyId: { type: sql.Int, value: companyId } }
+        );
+        log(`[entitlements] No entitlements found. Total entitlements for company ${companyId}: ${totalResult.recordset[0]?.total || 0}`, 'entitlements');
+      }
+    } catch (diagErr: any) {
+      log(`[entitlements] Diagnostic query failed: ${diagErr.message}`, 'entitlements');
+    }
+  }
   return result.recordset;
 }
 
