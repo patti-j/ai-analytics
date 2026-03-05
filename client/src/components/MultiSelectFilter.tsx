@@ -69,6 +69,7 @@ export function MultiSelectFilter({
   };
 
   const displayText = () => {
+    if (options.length === 0) return 'None';
     if (isAllSelected) return 'All';
     if (selected.length === 1) return getLabel(selected[0]);
     return `${selected.length} selected`;

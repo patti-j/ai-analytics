@@ -142,7 +142,7 @@ function buildTourSteps(entitlements: AiUserEntitlement[], isAdmin: boolean, isP
       if (vals && vals.length > 0) {
         lines.push(`${label}: ${vals.join(', ')}`);
       } else {
-        lines.push(`${label}: All (no restriction)`);
+        lines.push(`${label}: None`);
       }
     }
     scopeLines = lines.join('\n');
