@@ -53,8 +53,14 @@ export async function registerRoutes(
     const [entitlements, favRows] = await Promise.all([
       isCompanyAdmin
         ? Promise.resolve(null)
-        : getEntitlementsForUser(companyId, email).catch(() => []),
-      getFavoritesForUser(companyId, email).catch(() => []),
+        : getEntitlementsForUser(companyId, email).catch(err => {
+            log(`[session] FAILED to load entitlements for ${email}: ${err.message}`, 'error');
+            return [];
+          }),
+      getFavoritesForUser(companyId, email).catch(err => {
+        log(`[session] Failed to load favorites for ${email}: ${err.message}`, 'error');
+        return [];
+      }),
     ]);
 
     const favorites = favRows.map(r => ({
