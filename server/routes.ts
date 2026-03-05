@@ -94,7 +94,9 @@ export async function registerRoutes(
       }
 
       const users = await getUsersWithEntitlementStatus(companyId);
-      res.json({ users });
+      const currentEmail = req.embedSession!.email;
+      const filteredUsers = users.filter(u => u.UserEmail.toLowerCase() !== currentEmail.toLowerCase());
+      res.json({ users: filteredUsers });
     } catch (error: any) {
       log(`[admin-entitlements] Error fetching users: ${error.message}\n${error.stack}`, 'error');
       res.status(500).json({ error: error.message || 'Failed to fetch users' });
