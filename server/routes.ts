@@ -123,8 +123,11 @@ export async function registerRoutes(
       const email = decodeURIComponent(req.params.email);
       const grantedByEmail = req.embedSession!.email;
 
+      log(`[admin-entitlements] Save request for ${email} (company ${companyId}) by ${grantedByEmail}: ${JSON.stringify(req.body)}`, 'admin-entitlements');
+
       const parseResult = entitlementSaveSchema.safeParse(req.body);
       if (!parseResult.success) {
+        log(`[admin-entitlements] Validation failed: ${JSON.stringify(parseResult.error.format())}`, 'admin-entitlements');
         return res.status(400).json({ error: 'Invalid entitlement data', details: parseResult.error.format() });
       }
 
@@ -132,9 +135,10 @@ export async function registerRoutes(
       await replaceEntitlements(companyId, email, parseResult.data.scopes, grantedByEmail);
 
       const entitlements = await getEntitlementsForUser(companyId, email);
+      log(`[admin-entitlements] Save complete for ${email}: ${entitlements.length} entitlements now in DB`, 'admin-entitlements');
       res.json({ ok: true, email, entitlements });
     } catch (error: any) {
-      log(`[admin-entitlements] Error saving entitlements: ${error.message}`, 'error');
+      log(`[admin-entitlements] Error saving entitlements for ${email}: ${error.message}\n${error.stack}`, 'error');
       res.status(500).json({ error: 'Failed to save entitlements' });
     }
   });

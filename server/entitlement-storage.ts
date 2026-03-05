@@ -1,5 +1,5 @@
 import sql from 'mssql';
-import { executeWebAppQuery } from './db-webapp';
+import { executeWebAppQuery, getWebAppPool } from './db-webapp';
 import { AiAnalyticsUser, AiUserEntitlement, ScopeType, SCOPE_TYPES } from '@shared/schema';
 import { log } from './index';
 
@@ -81,32 +81,42 @@ export async function replaceEntitlements(
   scopes: { scopeType: ScopeType; scopeValue: string }[],
   grantedByEmail: string
 ): Promise<void> {
-  await executeWebAppQuery(
-    `DELETE FROM dbo.AiUserEntitlement WHERE CompanyId = @companyId AND UserEmail = @email`,
-    {
-      companyId: { type: sql.Int, value: companyId },
-      email: { type: sql.NVarChar(256), value: userEmail },
-    }
-  );
+  const pool = await getWebAppPool();
+  const transaction = new sql.Transaction(pool);
 
-  for (const scope of scopes) {
-    if (!SCOPE_TYPES.includes(scope.scopeType)) {
-      log(`[entitlements] Invalid scope type: ${scope.scopeType}, skipping`, 'entitlements');
-      continue;
-    }
-    await executeWebAppQuery(
-      `INSERT INTO dbo.AiUserEntitlement (CompanyId, UserEmail, ScopeType, ScopeValue)
-       VALUES (@companyId, @email, @scopeType, @scopeValue)`,
-      {
-        companyId: { type: sql.Int, value: companyId },
-        email: { type: sql.NVarChar(256), value: userEmail },
-        scopeType: { type: sql.NVarChar(50), value: scope.scopeType },
-        scopeValue: { type: sql.NVarChar(256), value: scope.scopeValue },
+  try {
+    await transaction.begin();
+
+    const deleteReq = new sql.Request(transaction);
+    deleteReq.input('companyId', sql.Int, companyId);
+    deleteReq.input('email', sql.NVarChar(256), userEmail);
+    await deleteReq.query(`DELETE FROM dbo.AiUserEntitlement WHERE CompanyId = @companyId AND UserEmail = @email`);
+
+    let inserted = 0;
+    for (const scope of scopes) {
+      if (!SCOPE_TYPES.includes(scope.scopeType)) {
+        log(`[entitlements] Invalid scope type: ${scope.scopeType}, skipping`, 'entitlements');
+        continue;
       }
-    );
-  }
+      const insertReq = new sql.Request(transaction);
+      insertReq.input('companyId', sql.Int, companyId);
+      insertReq.input('email', sql.NVarChar(256), userEmail);
+      insertReq.input('scopeType', sql.NVarChar(50), scope.scopeType);
+      insertReq.input('scopeValue', sql.NVarChar(256), scope.scopeValue);
+      await insertReq.query(
+        `INSERT INTO dbo.AiUserEntitlement (CompanyId, UserEmail, ScopeType, ScopeValue)
+         VALUES (@companyId, @email, @scopeType, @scopeValue)`
+      );
+      inserted++;
+    }
 
-  log(`[entitlements] Replaced ${scopes.length} entitlements for ${userEmail} (company ${companyId}) by ${grantedByEmail}`, 'entitlements');
+    await transaction.commit();
+    log(`[entitlements] Replaced entitlements for ${userEmail} (company ${companyId}) by ${grantedByEmail}: deleted old, inserted ${inserted}`, 'entitlements');
+  } catch (err: any) {
+    try { await transaction.rollback(); } catch {}
+    log(`[entitlements] Transaction FAILED for ${userEmail} (company ${companyId}): ${err.message}`, 'error');
+    throw err;
+  }
 }
 
 export async function getAllEntitlementsForCompany(companyId: number): Promise<AiUserEntitlement[]> {
