@@ -15,7 +15,7 @@ import { exportToCSV, exportToExcel } from '@/lib/export-utils';
 import { detectDateTimeColumns, formatCellValue } from '@/lib/date-formatter';
 import { usePublishDate } from '@/hooks/usePublishDate';
 import { transformRelativeDates, hasRelativeDateLanguage } from '@/lib/date-anchor';
-import { useSimulatedToday, getSimulatedTodaySync, fetchSimulatedToday } from '@/hooks/useSimulatedToday';
+import { useSimulatedToday, getSimulatedTodaySync } from '@/hooks/useSimulatedToday';
 import { useToast } from '@/hooks/use-toast';
 import { useTour, type TourStep } from '@/hooks/useTour';
 import { TourOverlay } from '@/components/TourOverlay';
@@ -23,7 +23,7 @@ import { useEmbedSession } from '@/contexts/EmbedSessionContext';
 import type { AiUserEntitlement } from '@shared/schema';
 import { apiUrl } from '@/lib/api-config';
 
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.9.1';
 
 // Columns to hide from results display (system-generated IDs are not user-friendly)
 const HIDDEN_ID_PATTERNS = [
@@ -245,12 +245,11 @@ export default function QueryPage() {
   // Fetch simulated today from server (runtime config)
   const { data: simulatedToday } = useSimulatedToday();
   
-  // Initialize simulated date cache on mount
   useEffect(() => {
-    fetchSimulatedToday().then(date => {
-      console.log('[date-check] Simulated Today (from server):', date.toISOString().split('T')[0]);
-    });
-  }, []);
+    if (simulatedToday) {
+      console.log('[date-check] Simulated Today (from server):', simulatedToday.toISOString().split('T')[0]);
+    }
+  }, [simulatedToday]);
   
   // Dev mode sanity check for date display
   useEffect(() => {
