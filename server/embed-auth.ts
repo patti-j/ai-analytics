@@ -5,7 +5,6 @@ import { EmbedTokenPayload, EmbedSession, SCOPE_TYPES } from '@shared/schema';
 import { log } from './index';
 import { getEntitlementsForUser } from './entitlement-storage';
 import { getFavoritesForUser } from './favorites-storage';
-import { checkUserHasPtAdminRole } from './query-log-storage';
 import { getSecretFromKeyVault } from './keyvault';
 
 const SESSION_COOKIE_NAME = 'pt_embed_session';
@@ -156,13 +155,10 @@ export async function handleSessionFromEmbed(req: Request, res: Response): Promi
     });
     log(`[embed-auth] Cookie set: secure=${isSecure}, sameSite=${isSecure ? 'none' : 'lax'}`, 'embed-auth');
 
-    const isPtAdmin = await checkUserHasPtAdminRole(session.companyId, session.email).catch(() => false);
-    const effectiveAdmin = session.isCompanyAdmin || isPtAdmin;
-
-    log(`[embed-auth] Loading entitlements for ${session.email} (company ${session.companyId}), effectiveAdmin=${effectiveAdmin}`, 'embed-auth');
+    log(`[embed-auth] Loading entitlements for ${session.email} (company ${session.companyId}), isCompanyAdmin=${session.isCompanyAdmin}`, 'embed-auth');
 
     const [entitlements, favRows] = await Promise.all([
-      effectiveAdmin
+      session.isCompanyAdmin
         ? Promise.resolve([])
         : getEntitlementsForUser(session.companyId, session.email).catch(err => {
             log(`[embed-auth] FAILED to load entitlements for ${session.email}: ${err.message}\n${err.stack}`, 'error');
@@ -174,10 +170,10 @@ export async function handleSessionFromEmbed(req: Request, res: Response): Promi
       }),
     ]);
 
-    if (!effectiveAdmin) {
-      log(`[embed-auth] Entitlements loaded for ${session.email}: ${entitlements.length} scopes — ${JSON.stringify(entitlements.map(e => `${e.ScopeType}:${e.ScopeValue}`))}`, 'embed-auth');
+    if (!session.isCompanyAdmin) {
+      log(`[embed-auth] Entitlements loaded for ${session.email}: ${entitlements.length} scopes`, 'embed-auth');
     }
-    log(`[embed-auth] Session for ${session.email}: isCompanyAdmin=${session.isCompanyAdmin}, isPtAdmin=${isPtAdmin}, effectiveAdmin=${effectiveAdmin}, entitlements=${entitlements.length}`, 'embed-auth');
+    log(`[embed-auth] Session for ${session.email}: isCompanyAdmin=${session.isCompanyAdmin}, entitlements=${entitlements.length}`, 'embed-auth');
 
     const favorites = favRows.map(r => ({
       question: r.QuestionText,
@@ -189,12 +185,11 @@ export async function handleSessionFromEmbed(req: Request, res: Response): Promi
       session: {
         email: session.email,
         companyId: session.companyId,
-        isCompanyAdmin: effectiveAdmin,
+        isCompanyAdmin: session.isCompanyAdmin,
         expiresAt: session.expiresAt,
       },
       sessionId: session.sessionId,
-      isAdmin: effectiveAdmin,
-      isPtAdmin,
+      isAdmin: session.isCompanyAdmin,
       entitlements,
       scopeTypes: SCOPE_TYPES,
       favorites,
@@ -251,17 +246,12 @@ export function embedSessionMiddleware(req: Request, res: Response, next: NextFu
   next();
 }
 
-export async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   if (!req.embedSession) {
     res.status(401).json({ error: 'Not authenticated' });
     return;
   }
   if (req.embedSession.isCompanyAdmin) {
-    next();
-    return;
-  }
-  const isPtAdmin = await checkUserHasPtAdminRole(req.embedSession.companyId, req.embedSession.email).catch(() => false);
-  if (isPtAdmin) {
     next();
     return;
   }

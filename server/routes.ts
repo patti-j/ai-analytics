@@ -4,7 +4,7 @@ import { executeQuery } from "./db-azure";
 import { validateAndModifySql, runValidatorSelfCheck, type ValidationOptions } from "./sql-validator";
 import { generateSqlFromQuestion, generateSuggestions, classifyQuestion, answerGeneralQuestion, generateNaturalLanguageResponse, streamNaturalLanguageResponse, cacheSuccessfulSql } from "./openai-client";
 import { log } from "./index";
-import { logQuery, getQueryAnalytics, getPopularQuestions as getPopularQuestionsDb, getFailedQueries as getFailedQueriesDb, checkUserHasPtAdminRole } from "./query-log-storage";
+import { logQuery, getQueryAnalytics, getPopularQuestions as getPopularQuestionsDb, getFailedQueries as getFailedQueriesDb } from "./query-log-storage";
 import { getSchemasForMode, formatSchemaForPrompt, TableSchema } from "./schema-introspection";
 import { validateSqlColumns } from "./sql-column-validator";
 import { readFileSync } from "fs";
@@ -50,11 +50,8 @@ export async function registerRoutes(
     }
     const { companyId, email, isCompanyAdmin, hasAIAnalyticsRole } = req.embedSession;
 
-    const isPtAdmin = await checkUserHasPtAdminRole(companyId, email).catch(() => false);
-    const effectiveAdmin = isCompanyAdmin || isPtAdmin;
-
     const [entitlements, favRows] = await Promise.all([
-      effectiveAdmin
+      isCompanyAdmin
         ? Promise.resolve([])
         : getEntitlementsForUser(companyId, email).catch(() => []),
       getFavoritesForUser(companyId, email).catch(() => []),
@@ -68,10 +65,9 @@ export async function registerRoutes(
     res.json({
       email,
       companyId,
-      isCompanyAdmin: effectiveAdmin,
-      isPtAdmin,
+      isCompanyAdmin,
       hasAIAnalyticsRole,
-      isAdmin: effectiveAdmin,
+      isAdmin: isCompanyAdmin,
       entitlements,
       scopeTypes: SCOPE_TYPES,
       favorites,
@@ -283,9 +279,7 @@ export async function registerRoutes(
       }
 
       const session = req.embedSession;
-      const filterIsPtAdmin = session ? await checkUserHasPtAdminRole(session.companyId, session.email).catch(() => false) : false;
-      const filterEffectiveAdmin = session ? (session.isCompanyAdmin || filterIsPtAdmin) : false;
-      if (session && !filterEffectiveAdmin) {
+      if (session && !session.isCompanyAdmin) {
         try {
           const entitlements = await getEntitlementsForUser(session.companyId, session.email);
           if (entitlements.length === 0) {
@@ -378,9 +372,8 @@ export async function registerRoutes(
   app.get("/api/admin/analytics", async (req, res) => {
     try {
       const session = req.embedSession!;
-      const isPtAdmin = await checkUserHasPtAdminRole(session.companyId, session.email);
-      if (!isPtAdmin) {
-        return res.status(403).json({ error: 'PT Admin access required' });
+      if (!session.isCompanyAdmin) {
+        return res.status(403).json({ error: 'Admin access required' });
       }
       const timeRange = req.query.timeRange ? parseInt(req.query.timeRange as string, 10) : 1440;
       const analytics = await getQueryAnalytics(timeRange);
@@ -394,9 +387,8 @@ export async function registerRoutes(
   app.get("/api/admin/analytics/failed-queries", async (req, res) => {
     try {
       const session = req.embedSession!;
-      const isPtAdmin = await checkUserHasPtAdminRole(session.companyId, session.email);
-      if (!isPtAdmin) {
-        return res.status(403).json({ error: 'PT Admin access required' });
+      if (!session.isCompanyAdmin) {
+        return res.status(403).json({ error: 'Admin access required' });
       }
       const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
       const failedQueries = await getFailedQueriesDb(limit);
@@ -881,10 +873,8 @@ export async function registerRoutes(
       let enforcedSql = finalSql;
       let entitlementFilters: string[] = [];
       try {
-        const isPtAdmin = await checkUserHasPtAdminRole(req.embedSession!.companyId, req.embedSession!.email).catch(() => false);
-        const effectiveAdmin = req.embedSession!.isCompanyAdmin || isPtAdmin;
-        const entitlements = effectiveAdmin ? [] : await getEntitlementsForUser(req.embedSession!.companyId, req.embedSession!.email);
-        const entResult = enforceEntitlements(enforcedSql, entitlements, effectiveAdmin);
+        const entitlements = req.embedSession!.isCompanyAdmin ? [] : await getEntitlementsForUser(req.embedSession!.companyId, req.embedSession!.email);
+        const entResult = enforceEntitlements(enforcedSql, entitlements, req.embedSession!.isCompanyAdmin);
         if (!entResult.allowed) {
           log(`Entitlement denied: ${entResult.blockedReason}`, 'ask-stream');
           sendEvent('error', { error: entResult.blockedReason || 'Access denied', isPermissionDenied: true });
@@ -1148,10 +1138,8 @@ export async function registerRoutes(
       
       let enforcedSql = finalSql;
       try {
-        const isPtAdmin = await checkUserHasPtAdminRole(req.embedSession!.companyId, req.embedSession!.email).catch(() => false);
-        const effectiveAdmin = req.embedSession!.isCompanyAdmin || isPtAdmin;
-        const entitlements = effectiveAdmin ? [] : await getEntitlementsForUser(req.embedSession!.companyId, req.embedSession!.email);
-        const entResult = enforceEntitlements(enforcedSql, entitlements, effectiveAdmin);
+        const entitlements = req.embedSession!.isCompanyAdmin ? [] : await getEntitlementsForUser(req.embedSession!.companyId, req.embedSession!.email);
+        const entResult = enforceEntitlements(enforcedSql, entitlements, req.embedSession!.isCompanyAdmin);
         if (!entResult.allowed) {
           log(`Entitlement denied: ${entResult.blockedReason}`, 'ask');
           return res.status(403).json({

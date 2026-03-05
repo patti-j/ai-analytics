@@ -23,7 +23,7 @@ import { useEmbedSession } from '@/contexts/EmbedSessionContext';
 import type { AiUserEntitlement } from '@shared/schema';
 import { apiUrl } from '@/lib/api-config';
 
-const APP_VERSION = '1.9.2';
+const APP_VERSION = '1.9.3';
 
 // Columns to hide from results display (system-generated IDs are not user-friendly)
 const HIDDEN_ID_PATTERNS = [
@@ -114,7 +114,7 @@ interface FilterOptions {
   workcenters: string[];
 }
 
-function buildTourSteps(entitlements: AiUserEntitlement[], isAdmin: boolean, isPtAdmin: boolean): TourStep[] {
+function buildTourSteps(entitlements: AiUserEntitlement[], isAdmin: boolean): TourStep[] {
   const scopeLabels: Record<string, string> = {
     PlanningArea: 'Planning Area',
     Plant: 'Plant',
@@ -125,7 +125,7 @@ function buildTourSteps(entitlements: AiUserEntitlement[], isAdmin: boolean, isP
   };
 
   let scopeLines = '';
-  if (isAdmin || isPtAdmin) {
+  if (isAdmin) {
     scopeLines = 'You have admin access — all data is visible to you.';
   } else if (entitlements.length === 0) {
     scopeLines = 'Your permissions have not been configured yet. Contact your administrator to get access.';
@@ -225,8 +225,8 @@ export default function QueryPage() {
   const userScrolledRef = useRef(false);
   const lastScrollTopRef = useRef(0);
   
-  const { isAuthenticated, isCompanyAdmin, isPtAdmin, entitlements, favorites, isFavorite, toggleFavorite, removeFavorite, sessionId } = useEmbedSession();
-  const tourSteps = useMemo(() => buildTourSteps(entitlements || [], isCompanyAdmin, isPtAdmin), [entitlements, isCompanyAdmin, isPtAdmin]);
+  const { isAuthenticated, isCompanyAdmin, entitlements, favorites, isFavorite, toggleFavorite, removeFavorite, sessionId } = useEmbedSession();
+  const tourSteps = useMemo(() => buildTourSteps(entitlements || [], isCompanyAdmin), [entitlements, isCompanyAdmin]);
   const tour = useTour(tourSteps);
   
   // Auto-start tour for first-time users (after a short delay to ensure page is loaded)
@@ -271,8 +271,7 @@ export default function QueryPage() {
       console.log('[filter-options] Not authenticated, skipping filter load');
       return;
     }
-    const effectiveAdmin = isCompanyAdmin || isPtAdmin;
-    console.log('[filter-options] Loading filters: effectiveAdmin=', effectiveAdmin, 'isCompanyAdmin=', isCompanyAdmin, 'isPtAdmin=', isPtAdmin, 'entitlements=', entitlements?.length);
+    console.log('[filter-options] Loading filters: isCompanyAdmin=', isCompanyAdmin, 'entitlements=', entitlements?.length);
 
     function buildFromEntitlements(): FilterOptions | null {
       if (!entitlements || entitlements.length === 0) return null;
@@ -301,7 +300,7 @@ export default function QueryPage() {
              (data.workcenters?.length > 0);
     }
 
-    if (effectiveAdmin) {
+    if (isCompanyAdmin) {
       fetch(apiUrl('/api/filter-options'), { credentials: 'include' })
         .then(res => {
           if (!res.ok) throw new Error(`${res.status}`);
@@ -357,7 +356,7 @@ export default function QueryPage() {
           if (fallback) setFilterOptions(fallback);
         });
     }
-  }, [isAuthenticated, entitlements, isCompanyAdmin, isPtAdmin]);
+  }, [isAuthenticated, entitlements, isCompanyAdmin]);
 
   const handleThumbsDown = () => {
     setShowFeedbackComment(true);
@@ -796,7 +795,7 @@ export default function QueryPage() {
             </p>
           </div>
           <div className="flex items-center gap-1">
-            {(isCompanyAdmin || isPtAdmin) && (
+            {isCompanyAdmin && (
               <Link href="/admin/users">
                 <Button
                   variant="ghost"
@@ -809,7 +808,7 @@ export default function QueryPage() {
                 </Button>
               </Link>
             )}
-            {isPtAdmin && (
+            {isCompanyAdmin && (
               <Link href="/dashboard" data-tour="dashboard-link">
                 <Button
                   variant="ghost"
@@ -905,7 +904,7 @@ export default function QueryPage() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-3">
-                {!isCompanyAdmin && !isPtAdmin && entitlements.length === 0 && (
+                {!isCompanyAdmin && entitlements.length === 0 && (
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-sm" data-testid="no-entitlements-banner">
                     <AlertCircle className="h-4 w-4 flex-shrink-0" />
                     <span>Your data access has not been configured yet. Contact your company administrator to get access.</span>
@@ -918,7 +917,7 @@ export default function QueryPage() {
                     options={filterOptions.planningAreas}
                     selected={selectedPlanningAreas}
                     onChange={setSelectedPlanningAreas}
-                    hasAllAccess={isCompanyAdmin || isPtAdmin}
+                    hasAllAccess={isCompanyAdmin}
                     width="w-[160px]"
                     testId="select-planning-area"
                   />
@@ -930,7 +929,7 @@ export default function QueryPage() {
                     labels={Object.fromEntries((filterOptions.scenarios || []).map(s =>
                       [s.id, s.name && s.type ? `${s.id} - ${s.name} (${s.type})` : s.id]
                     ))}
-                    hasAllAccess={isCompanyAdmin || isPtAdmin}
+                    hasAllAccess={isCompanyAdmin}
                     width="w-[200px]"
                     testId="select-scenario"
                   />
@@ -939,7 +938,7 @@ export default function QueryPage() {
                     options={filterOptions.plants}
                     selected={selectedPlants}
                     onChange={setSelectedPlants}
-                    hasAllAccess={isCompanyAdmin || isPtAdmin}
+                    hasAllAccess={isCompanyAdmin}
                     width="w-[120px]"
                     testId="select-plant"
                   />
@@ -948,7 +947,7 @@ export default function QueryPage() {
                     options={filterOptions.resources}
                     selected={selectedResources}
                     onChange={setSelectedResources}
-                    hasAllAccess={isCompanyAdmin || isPtAdmin}
+                    hasAllAccess={isCompanyAdmin}
                     width="w-[160px]"
                     testId="select-resource"
                   />
@@ -957,7 +956,7 @@ export default function QueryPage() {
                     options={filterOptions.products}
                     selected={selectedProducts}
                     onChange={setSelectedProducts}
-                    hasAllAccess={isCompanyAdmin || isPtAdmin}
+                    hasAllAccess={isCompanyAdmin}
                     width="w-[160px]"
                     testId="select-product"
                   />
@@ -966,7 +965,7 @@ export default function QueryPage() {
                     options={filterOptions.workcenters}
                     selected={selectedWorkcenters}
                     onChange={setSelectedWorkcenters}
-                    hasAllAccess={isCompanyAdmin || isPtAdmin}
+                    hasAllAccess={isCompanyAdmin}
                     width="w-[160px]"
                     testId="select-workcenter"
                   />

@@ -240,27 +240,3 @@ export async function getFailedQueries(limit: number = 50): Promise<Array<{
   }));
 }
 
-export async function checkUserHasPtAdminRole(companyId: number, email: string): Promise<boolean> {
-  try {
-    const result = await executeWebAppQuery(
-      `SELECT r.Name
-       FROM dbo.Users u
-       INNER JOIN dbo.UserRole ur ON u.Id = ur.UsersId
-       INNER JOIN dbo.Roles r ON ur.RoleId = r.Id
-       WHERE u.CompanyId = @companyId
-         AND u.Email = @email
-         AND (r.Name LIKE 'PT[_ ]Admin%' OR r.Name LIKE 'PlanetTogether[_ ]Admin%')`,
-      {
-        companyId: { type: sql.Int, value: companyId },
-        email: { type: sql.NVarChar(256), value: email },
-      }
-    );
-    if (result.recordset.length > 0) {
-      log(`[query-log] PT admin role matched for ${email}: ${result.recordset.map((r: any) => r.Name).join(', ')}`, 'query-log');
-    }
-    return result.recordset.length > 0;
-  } catch (err: any) {
-    log(`[query-log] Failed to check PT admin role: ${err.message}`, 'query-log');
-    return false;
-  }
-}

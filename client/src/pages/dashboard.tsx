@@ -43,15 +43,15 @@ interface AnalyticsData {
 }
 
 export default function Dashboard() {
-  const { isPtAdmin } = useEmbedSession();
+  const { isCompanyAdmin } = useEmbedSession();
 
   const { data, isLoading, error } = useQuery<AnalyticsData>({
     queryKey: ['/api/admin/analytics'],
     refetchInterval: 30000,
-    enabled: isPtAdmin,
+    enabled: isCompanyAdmin,
   });
 
-  if (!isPtAdmin) {
+  if (!isCompanyAdmin) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center" data-testid="dashboard-access-denied">
         <Card className="w-full max-w-md">
@@ -59,7 +59,7 @@ export default function Dashboard() {
             <ShieldAlert className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
             <CardTitle>Access Restricted</CardTitle>
             <CardDescription>
-              The analytics dashboard is only available to PlanetTogether administrators.
+              The analytics dashboard is only available to company administrators.
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">
