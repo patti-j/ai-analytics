@@ -5,7 +5,7 @@ import { log } from './index';
 
 export async function getUsersForCompany(companyId: number): Promise<AiAnalyticsUser[]> {
   const result = await executeWebAppQuery(
-    `SELECT CompanyId, UserEmail, IsActive, CreatedAt
+    `SELECT CompanyId, UserEmail, IsActive
      FROM dbo.AiAnalyticsUser
      WHERE CompanyId = @companyId
      ORDER BY UserEmail`,
@@ -16,7 +16,7 @@ export async function getUsersForCompany(companyId: number): Promise<AiAnalytics
 
 export async function getUser(companyId: number, email: string): Promise<AiAnalyticsUser | null> {
   const result = await executeWebAppQuery(
-    `SELECT CompanyId, UserEmail, IsActive, CreatedAt
+    `SELECT CompanyId, UserEmail, IsActive
      FROM dbo.AiAnalyticsUser
      WHERE CompanyId = @companyId AND UserEmail = @email`,
     {
@@ -35,8 +35,8 @@ export async function upsertUser(companyId: number, email: string, isActive: boo
      WHEN MATCHED THEN
        UPDATE SET IsActive = @isActive
      WHEN NOT MATCHED THEN
-       INSERT (CompanyId, UserEmail, IsActive, CreatedAt)
-       VALUES (@companyId, @email, @isActive, GETUTCDATE());`,
+       INSERT (CompanyId, UserEmail, IsActive)
+       VALUES (@companyId, @email, @isActive);`,
     {
       companyId: { type: sql.Int, value: companyId },
       email: { type: sql.NVarChar(256), value: email },
@@ -128,13 +128,13 @@ export interface UserWithEntitlementStatus extends AiAnalyticsUser {
 
 export async function getUsersWithEntitlementStatus(companyId: number): Promise<UserWithEntitlementStatus[]> {
   const result = await executeWebAppQuery(
-    `SELECT u.CompanyId, u.UserEmail, u.IsActive, u.CreatedAt,
+    `SELECT u.CompanyId, u.UserEmail, u.IsActive,
             CASE WHEN COUNT(e.ScopeType) > 0 THEN 1 ELSE 0 END AS hasEntitlements,
             COUNT(e.ScopeType) AS entitlementCount
      FROM dbo.AiAnalyticsUser u
      LEFT JOIN dbo.AiUserEntitlement e ON u.CompanyId = e.CompanyId AND u.UserEmail = e.UserEmail
      WHERE u.CompanyId = @companyId
-     GROUP BY u.CompanyId, u.UserEmail, u.IsActive, u.CreatedAt
+     GROUP BY u.CompanyId, u.UserEmail, u.IsActive
      ORDER BY u.UserEmail`,
     { companyId: { type: sql.Int, value: companyId } }
   );

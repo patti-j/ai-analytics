@@ -17,7 +17,6 @@ interface UserRow {
   CompanyId: number;
   UserEmail: string;
   IsActive: boolean;
-  CreatedAt: string;
   hasEntitlements: boolean;
   entitlementCount: number;
 }
