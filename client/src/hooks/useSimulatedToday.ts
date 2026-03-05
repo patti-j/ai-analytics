@@ -6,6 +6,8 @@ interface ConfigResponse {
   serverTime: string;
 }
 
+// React Query hook — fetches the simulated "today" date from /api/config.
+// Used in query.tsx to anchor all relative date expressions (e.g. "last 30 days").
 export function useSimulatedToday() {
   return useQuery({
     queryKey: ['simulated-today'],
@@ -30,45 +32,9 @@ export function useSimulatedToday() {
   });
 }
 
-let cachedSimulatedToday: Date | null = null;
-let cacheInitialized = false;
-
-export async function fetchSimulatedToday(): Promise<Date> {
-  if (cacheInitialized && cachedSimulatedToday) {
-    return cachedSimulatedToday;
-  }
-  
-  try {
-    const response = await fetch(apiUrl('/api/config'));
-    if (response.ok) {
-      const data: ConfigResponse = await response.json();
-      if (data.simulatedToday) {
-        const [year, month, day] = data.simulatedToday.split('-').map(Number);
-        cachedSimulatedToday = new Date(year, month - 1, day);
-        cacheInitialized = true;
-        return cachedSimulatedToday;
-      }
-    }
-  } catch (e) {
-    console.warn('[useSimulatedToday] Failed to fetch server config, using fallback');
-  }
-  
-  const fixed = import.meta.env.VITE_DEV_FIXED_TODAY as string;
-  if (fixed) {
-    const [year, month, day] = fixed.split('-').map(Number);
-    cachedSimulatedToday = new Date(year, month - 1, day);
-    cacheInitialized = true;
-    return cachedSimulatedToday;
-  }
-  
-  return new Date();
-}
-
+// Synchronous fallback — returns the cached simulated date or VITE_DEV_FIXED_TODAY
+// or real Date.now(). Used when the React Query hook hasn't resolved yet.
 export function getSimulatedTodaySync(): Date {
-  if (cachedSimulatedToday) {
-    return cachedSimulatedToday;
-  }
-  
   const fixed = import.meta.env.VITE_DEV_FIXED_TODAY as string;
   if (fixed) {
     const [year, month, day] = fixed.split('-').map(Number);

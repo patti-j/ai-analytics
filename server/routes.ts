@@ -367,7 +367,7 @@ export async function registerRoutes(
     });
   });
 
-  // ===== ADMIN ANALYTICS ENDPOINTS (PT admin role required) =====
+  // ===== ADMIN ANALYTICS ENDPOINTS (company admin required) =====
 
   app.get("/api/admin/analytics", async (req, res) => {
     try {

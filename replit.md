@@ -9,6 +9,7 @@ Query Insight is a natural language interface designed to query manufacturing pl
 Preferred communication style: Simple, everyday language.
 Code quality expectation: Production-ready, clean code suitable for dev team code review.
 Cleanup approach: Clean up incrementally as features are built, not in large batches at the end.
+Version numbering: Increment APP_VERSION (in query.tsx) and package.json version on every commit.
 
 ## System Architecture
 
@@ -26,8 +27,8 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 - **Comprehensive Schema Grounding:** Database schemas are prefetched and cached. A SQL Column Validator validates all column references in generated SQL against the cached schema.
 - **JOIN Support:** The SQL validator supports safe `INNER`/`LEFT`/`RIGHT` `JOIN`s with validated table references.
 - **Schema Introspection:** `INFORMATION_SCHEMA.COLUMNS` is used to provide OpenAI with exact column lists, preventing hallucination.
-- **Query Performance Monitoring:** An analytics dashboard (`/dashboard`) provides metrics on query performance, success rates, latency, and error analytics. Restricted to PT admin users only (users with `PT_*` roles in the webapp DB). Analytics data is stored in `dbo.AiQueryLog` (webapp DB) and served via `/api/admin/analytics` and `/api/admin/analytics/failed-queries` endpoints.
-- **Entitlement-Based Access Enforcement:** Server-side enforcement via `enforceEntitlements()` injects WHERE clauses based on DB-backed user entitlements (6 scope types). Non-admin users with 0 entitlements are blocked.
+- **Query Performance Monitoring:** An analytics dashboard (`/dashboard`) provides metrics on query performance, success rates, latency, and error analytics. Restricted to company admins only. Analytics data is stored in `dbo.AiQueryLog` (webapp DB) and served via `/api/admin/analytics` and `/api/admin/analytics/failed-queries` endpoints.
+- **Entitlement-Based Access Enforcement:** Server-side enforcement via `enforceEntitlements()` injects WHERE clauses based on DB-backed user entitlements (6 scope types). Non-admin users with 0 entitlements are blocked. Admin users bypass entitlements entirely (null entitlements = unrestricted access).
 - **Server-Persisted Favorites:** Favorite questions are persisted to `dbo.AiUserFavorite` (CompanyId, UserEmail, QuestionText, CreatedAt) via `/api/my-favorites` GET/POST/DELETE routes. Favorites are loaded at session init time in `EmbedSessionContext` (same pattern as entitlements) and managed via context methods (`addFavorite`, `removeFavorite`, `toggleFavorite`, `isFavorite`).
 - **Global Filters:** Six multi-select checkbox filters (Planning Area, Scenario, Plant, Resource, Product, Workcenter) matching the 6 entitlement scope types. Each filter has an "All" checkbox at the top (default). Multiple values can be selected, generating SQL `IN()` clauses. Filter options are fetched from the per-company Publish DB (DbType=2 in CompanyDbs table) with entitlements-based intersection for non-admin users. Component: `client/src/components/MultiSelectFilter.tsx`. Product filter has `JobProduct` column fallback for schemas without `ProductName`.
 - **SSE Streaming:** Full SSE streaming support (`/api/ask/stream`) with typing effects and a stop button is available, auto-enabled in Azure deployments.
@@ -37,12 +38,19 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 
 ## Embed Auth & Multi-Tenant Architecture
 
-**Iframe Embedding:** The app supports iframe embedding within a Blazor WebApp parent via JWT-based embed auth handshake:
-- Parent sends `PT.EMBED.AUTH` postMessage with JWT embed token
+**Authentication — postMessage only:**
+- Parent Blazor app sends `PT.EMBED.AUTH` postMessage with JWT embed token
 - App validates JWT (iss=PlanetTogether.WebApp, aud=PlanetTogether.EmbedApp) using `EMBED_TOKEN_SECRET`
 - Creates 8-hour HttpOnly cookie session (`pt_embed_session`, `SameSite=None; Secure` in production) in memory
 - Session ID returned in `/api/session/from-embed` response for cross-origin EventSource auth (passed as `_sid` query param)
-- No dev bypass — JWT embed token required for all environments
+- No URL token auth, no direct session fallback — postMessage is the ONLY auth path
+- Duplicate `PT.EMBED.AUTH` messages are ignored once authenticated (guard in EmbedSessionContext)
+
+**Admin Determination:**
+- Admin status comes solely from the `isCompanyAdmin` JWT claim
+- No server-side role table lookups (PT admin role checks were removed in v1.9.3)
+- Admin users: entitlements are `null` (not fetched), all scopes accessible
+- Non-admin users: entitlements loaded from `dbo.AiUserEntitlement`, enforced on queries
 
 **Cross-Origin API Architecture:**
 - The iframe is loaded from the AI Analytics Azure Web App but rendered within the Blazor host context
@@ -55,66 +63,74 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
 **Multi-Tenant Database Access:**
 - `server/db-webapp.ts`: Connection to webapp database via `WEBAPP_DB_CONNECTION_STRING` (ADO.NET format)
 - `server/db-publish.ts`: Dynamic per-company Publish DB pools looked up from `CompanyDbs` table in webapp DB
-- `server/db-azure.ts`: Original single-tenant connection (no longer used as fallback; Publish DB is primary)
+- `server/db-azure.ts`: Original single-tenant connection (legacy, kept as fallback)
 
-**4 AI Tables (all in webapp DB):**
-- `dbo.AiAnalyticsUser` — user records (CompanyId + UserEmail PK)
-- `dbo.AiUserEntitlement` — scope-based permissions (CompanyId + UserEmail + ScopeType + ScopeValue PK)
-- `dbo.AiUserFavorite` — saved questions (CompanyId + UserEmail + QuestionText PK)
+**4 AI Tables (all in webapp DB `pt_webapp_dev`):**
+- `dbo.AiAnalyticsUser` — user records (CompanyId, UserEmail, IsActive)
+- `dbo.AiUserEntitlement` — scope-based permissions (CompanyId, UserEmail, ScopeType, ScopeValue). Note: table also has GrantedAtUtc and GrantedByEmail columns but our queries only SELECT the first 4.
+- `dbo.AiUserFavorite` — saved questions (CompanyId, UserEmail, QuestionText, CreatedAt)
 - `dbo.AiQueryLog` — query audit log (Id IDENTITY PK, CompanyId, UserEmail, QuestionText, GeneratedSql, RowCount, DurationMs, LlmMs, SqlMs, Success, ErrorMessage, ErrorStage, CreatedAt)
-- Entitlements and favorites are bundled into `/api/session/from-embed` and `/api/session` responses (no separate GET endpoints)
+- Entitlements and favorites are bundled into `/api/session/from-embed` and `/api/session` responses
 - Favorites mutations via POST/DELETE `/api/my-favorites`
 - Admin CRUD at `/api/admin/entitlements/*` protected by `requireAdmin` middleware
-- Analytics endpoints at `/api/admin/analytics` and `/api/admin/analytics/failed-queries` protected by PT admin role check
+- Analytics endpoints at `/api/admin/analytics` protected by company admin check
 - 6 scope types: PlanningArea, Plant, Scenario, Resource, Product, Workcenter
 - **Query Enforcement:** `enforceEntitlements()` in `server/query-permissions.ts` injects WHERE clauses based on user entitlements into both `/api/ask` and `/api/ask/stream`. Non-admin users with 0 entitlements are blocked. Entitlement lookup failure is fail-closed (503). Filter-options endpoint intersects dropdown values with user entitlements (non-admin only). Column mappings cover all 6 scope types across DASHt tables.
+- **Entitlement save:** `replaceEntitlements()` wraps DELETE+INSERTs in a SQL transaction for atomicity.
 
 **Key Server Files:**
-- `server/embed-auth.ts`: JWT validation, session store, middleware, requireAdmin
-- `server/db-webapp.ts`: pt_webapp_dev connection pool
-- `server/db-publish.ts`: Dynamic per-company Publish DB pools
-- `server/entitlement-storage.ts`: AiAnalyticsUser & AiUserEntitlement CRUD
-- `server/membership-sync.ts`: AI_Analytics role membership sync
+- `server/embed-auth.ts`: JWT validation, in-memory session store, cookie middleware, requireAdmin
+- `server/db-webapp.ts`: pt_webapp_dev connection pool (ADO.NET connection string parsing)
+- `server/db-publish.ts`: Dynamic per-company Publish DB pools (looked up from CompanyDbs)
+- `server/entitlement-storage.ts`: AiAnalyticsUser & AiUserEntitlement CRUD, diagnostic logging on 0-row results
+- `server/membership-sync.ts`: AI_Analytics role membership sync (role matching: `LIKE 'AI[_ ]Analytics%'`)
 - `server/favorites-storage.ts`: AiUserFavorite CRUD (CompanyId+UserEmail+QuestionText scoped)
-- `server/query-log-storage.ts`: AiQueryLog insert + analytics aggregation (logQuery, getQueryAnalytics, getPopularQuestions, getFailedQueries, checkUserHasPtAdminRole)
+- `server/query-log-storage.ts`: AiQueryLog insert + analytics aggregation (logQuery, getQueryAnalytics, getPopularQuestions, getFailedQueries)
+- `server/query-permissions.ts`: Entitlement enforcement — injects WHERE clauses into SQL based on user scopes
 
 **Theme Override from Parent:**
-- Parent can send `ui.theme` ("dark"|"light") in the `PT.EMBED.AUTH` postMessage
+- Parent can send `ui.theme` ("dark"|"light") in the `PT.EMBED.AUTH` postMessage payload
+- Default theme is "light"
 - `EmbedSessionContext.applyTheme()` applies CSS class + localStorage + dispatches `theme-override` CustomEvent
 - `ThemeProvider` listens for `theme-override` event to sync its React state with the DOM change
+- Duplicate auth messages still apply theme updates (even though re-auth is skipped)
 
 **Key Frontend Files:**
-- `client/src/contexts/EmbedSessionContext.tsx`: PostMessage listener, session management, entitlements loading, theme override
+- `client/src/contexts/EmbedSessionContext.tsx`: PostMessage listener, session management, entitlements loading, theme override, duplicate auth guard
 - `client/src/components/theme-provider.tsx`: Theme management with external override support via CustomEvent
-- `client/src/pages/admin-users.tsx`: Admin page for managing user entitlements (/admin/users)
+- `client/src/pages/admin-users.tsx`: Admin page for managing user entitlements (/admin/users) — expandable inline cards, filters out current admin from list
+- `client/src/pages/query.tsx`: Main query interface — filters, question input, results, favorites
+- `client/src/pages/dashboard.tsx`: Analytics dashboard for company admins
+
+**Navigation Icons (query.tsx header):**
+- Users icon (admin users page) — visible to company admins only
+- BarChart3 icon (analytics dashboard) — visible to company admins only
+- TableProperties icon (query matrix reference) — visible to all
+- HelpCircle icon (guided tour) — visible to all
+- ThemeToggle — visible to all
 
 **Environment Variables Required:**
-- `EMBED_TOKEN_SECRET`: Secret for JWT validation (required)
-- `WEBAPP_DB_CONNECTION_STRING`: ADO.NET connection string for webapp database (AiAnalyticsUser, AiUserEntitlement, AiUserFavorite tables)
+- `EMBED_TOKEN_SECRET`: Secret for JWT validation (required, also resolved from Key Vault as `EMBED-TOKEN-SECRET`)
+- `WEBAPP_DB_CONNECTION_STRING`: ADO.NET connection string for webapp database (AiAnalyticsUser, AiUserEntitlement, AiUserFavorite, AiQueryLog tables)
 - `PUBLISH_DB_PASSWORD`: Password for per-company Publish DB connections (optional if Key Vault is configured)
 - `AZURE_KEYVAULT_URL` (or `KEY_VAULT_URL`): Azure Key Vault URL (e.g., `https://vault-name.vault.azure.net/`)
 - `AZURE_TENANT_ID` (or `KEY_VAULT_TENANT_ID`): Azure AD tenant ID for Key Vault auth
 - `AZURE_CLIENT_ID` (or `KEY_VAULT_CLIENT_ID`): Azure AD app registration client ID
 - `AZURE_CLIENT_SECRET` (or `KEY_VAULT_CLIENT_SECRET`): Azure AD app registration client secret
 - `DATABASE_URL`: Existing Azure SQL Publish DB connection (for single-tenant fallback)
+- `VITE_API_BASE_URL`: AI Analytics Web App URL for cross-origin API calls from iframe
+- `CORS_ORIGIN`: Additional allowed CORS origins (comma-separated, optional)
 
 **Key Vault Secrets Used:**
-- `EMBED-TOKEN-SECRET`: JWT signing key for embed token validation (also checked as `EMBED_TOKEN_SECRET` env var)
+- `EMBED-TOKEN-SECRET`: JWT signing key for embed token validation
 - DB passwords via `DBPasswordKey` from CompanyDbs table (e.g., `AcmeDBPassword`)
 - Key Vault module: `server/keyvault.ts` (shared by embed-auth.ts and db-publish.ts)
 
-**Navigation Icons (query.tsx header):**
-- Users icon (admin users page) — visible to company admins (`isCompanyAdmin`)
-- BarChart3 icon (analytics dashboard) — visible to PT admins (`isPtAdmin`)
-- TableProperties icon (query matrix reference) — visible to all
-- HelpCircle icon (guided tour) — visible to all
-- ThemeToggle — visible to all
-
-**Webapp DB Table Names (pt_webapp_dev):**
-- `dbo.Users` (PK: `Id`, columns: Email, CompanyId, Name, LastName, IsPTAdmin, IsPTDev, etc.)
-- `dbo.Roles` (PK: `Id`, columns: Name, CompanyId, IsGlobal, etc.)
-- `dbo.UserRole` (UsersId FK→Users.Id, RoleId FK→Roles.Id)
-- PT admin detection: `checkUserHasPtAdminRole()` joins Users→UserRole→Roles where `Name LIKE 'PT%'`
+**Logging:**
+- Health check (`/api/health`) is excluded from request logging to reduce noise
+- Azure health probes hit `/api/health` every 60 seconds — this is expected
+- Entitlement queries log input parameters and result counts for debugging
+- When entitlements return 0 rows for a non-admin, diagnostic queries check for email mismatches
 
 ## Maintenance Scripts
 
@@ -122,16 +138,16 @@ Cleanup approach: Clean up incrementally as features are built, not in large bat
   ```bash
   npx tsx script/generate-matrix-html.ts
   ```
-  This ensures the documentation stays in sync with the actual table selection logic.
-
-- **PT Admin Role Assignment:** Assign the PTAdmin role to a user by email:
-  ```bash
-  npx tsx script/add-pt-admin-role.ts <email>
-  ```
-  This inserts a UserRole row and sets IsPTAdmin=1 on the Users record.
 
 ## External Dependencies
 
 - **Azure SQL Database:** The primary data source, configured via `DATABASE_URL` or discrete environment variables. Tables follow the `publish.DASHt_*` naming convention.
 - **OpenAI API:** Used for natural language to SQL translation, requiring `AI_INTEGRATIONS_OPENAI_API_KEY` or `OPENAI_API_KEY`.
 - **Environment Configuration:** Secrets and configurations like `DATABASE_URL`, `AI_INTEGRATIONS_OPENAI_API_KEY`, `DIAGNOSTICS_TOKEN`, and `PUBLIC_BASE_URL` are managed via Replit Secrets or Azure App Service configuration.
+
+## Known Issues / Tech Debt
+
+- `xlsx` package has a high-severity vulnerability with no fix available; consider migrating to `exceljs`
+- `esbuild` and `drizzle-kit` have moderate-severity dev-only vulnerabilities
+- `drizzle.config.ts` references `shared/schema.ts` but Drizzle ORM is not actively used (Azure SQL is accessed directly via `mssql`)
+- ~30 unused shadcn/ui component files exist in `client/src/components/ui/` (standard boilerplate, harmless)
