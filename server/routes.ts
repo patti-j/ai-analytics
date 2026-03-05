@@ -52,7 +52,7 @@ export async function registerRoutes(
 
     const [entitlements, favRows] = await Promise.all([
       isCompanyAdmin
-        ? Promise.resolve([])
+        ? Promise.resolve(null)
         : getEntitlementsForUser(companyId, email).catch(() => []),
       getFavoritesForUser(companyId, email).catch(() => []),
     ]);
@@ -68,7 +68,7 @@ export async function registerRoutes(
       isCompanyAdmin,
       hasAIAnalyticsRole,
       isAdmin: isCompanyAdmin,
-      entitlements,
+      entitlements: entitlements || [],
       scopeTypes: SCOPE_TYPES,
       favorites,
     });
@@ -873,8 +873,8 @@ export async function registerRoutes(
       let enforcedSql = finalSql;
       let entitlementFilters: string[] = [];
       try {
-        const entitlements = req.embedSession!.isCompanyAdmin ? [] : await getEntitlementsForUser(req.embedSession!.companyId, req.embedSession!.email);
-        const entResult = enforceEntitlements(enforcedSql, entitlements, req.embedSession!.isCompanyAdmin);
+        const entitlements = req.embedSession!.isCompanyAdmin ? null : await getEntitlementsForUser(req.embedSession!.companyId, req.embedSession!.email);
+        const entResult = enforceEntitlements(enforcedSql, entitlements || [], req.embedSession!.isCompanyAdmin);
         if (!entResult.allowed) {
           log(`Entitlement denied: ${entResult.blockedReason}`, 'ask-stream');
           sendEvent('error', { error: entResult.blockedReason || 'Access denied', isPermissionDenied: true });
@@ -1138,8 +1138,8 @@ export async function registerRoutes(
       
       let enforcedSql = finalSql;
       try {
-        const entitlements = req.embedSession!.isCompanyAdmin ? [] : await getEntitlementsForUser(req.embedSession!.companyId, req.embedSession!.email);
-        const entResult = enforceEntitlements(enforcedSql, entitlements, req.embedSession!.isCompanyAdmin);
+        const entitlements = req.embedSession!.isCompanyAdmin ? null : await getEntitlementsForUser(req.embedSession!.companyId, req.embedSession!.email);
+        const entResult = enforceEntitlements(enforcedSql, entitlements || [], req.embedSession!.isCompanyAdmin);
         if (!entResult.allowed) {
           log(`Entitlement denied: ${entResult.blockedReason}`, 'ask');
           return res.status(403).json({

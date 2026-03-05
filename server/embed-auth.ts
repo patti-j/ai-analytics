@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import type { Request, Response, NextFunction } from 'express';
-import { EmbedTokenPayload, EmbedSession, SCOPE_TYPES } from '@shared/schema';
+import { EmbedTokenPayload, EmbedSession, AiUserEntitlement, SCOPE_TYPES } from '@shared/schema';
 import { log } from './index';
 import { getEntitlementsForUser } from './entitlement-storage';
 import { getFavoritesForUser } from './favorites-storage';
@@ -155,14 +155,12 @@ export async function handleSessionFromEmbed(req: Request, res: Response): Promi
     });
     log(`[embed-auth] Cookie set: secure=${isSecure}, sameSite=${isSecure ? 'none' : 'lax'}`, 'embed-auth');
 
-    log(`[embed-auth] Loading entitlements for ${session.email} (company ${session.companyId}), isCompanyAdmin=${session.isCompanyAdmin}`, 'embed-auth');
-
     const [entitlements, favRows] = await Promise.all([
       session.isCompanyAdmin
-        ? Promise.resolve([])
+        ? Promise.resolve(null)
         : getEntitlementsForUser(session.companyId, session.email).catch(err => {
             log(`[embed-auth] FAILED to load entitlements for ${session.email}: ${err.message}\n${err.stack}`, 'error');
-            return [];
+            return [] as AiUserEntitlement[];
           }),
       getFavoritesForUser(session.companyId, session.email).catch(err => {
         log(`[embed-auth] Failed to load favorites: ${err.message}`, 'embed-auth');
@@ -170,10 +168,11 @@ export async function handleSessionFromEmbed(req: Request, res: Response): Promi
       }),
     ]);
 
-    if (!session.isCompanyAdmin) {
-      log(`[embed-auth] Entitlements loaded for ${session.email}: ${entitlements.length} scopes`, 'embed-auth');
+    if (session.isCompanyAdmin) {
+      log(`[embed-auth] Session for ${session.email}: isCompanyAdmin=true (all scopes, entitlement check skipped)`, 'embed-auth');
+    } else {
+      log(`[embed-auth] Session for ${session.email}: ${(entitlements || []).length} entitlements loaded`, 'embed-auth');
     }
-    log(`[embed-auth] Session for ${session.email}: isCompanyAdmin=${session.isCompanyAdmin}, entitlements=${entitlements.length}`, 'embed-auth');
 
     const favorites = favRows.map(r => ({
       question: r.QuestionText,
@@ -190,7 +189,7 @@ export async function handleSessionFromEmbed(req: Request, res: Response): Promi
       },
       sessionId: session.sessionId,
       isAdmin: session.isCompanyAdmin,
-      entitlements,
+      entitlements: entitlements || [],
       scopeTypes: SCOPE_TYPES,
       favorites,
     });
